@@ -7,6 +7,7 @@ Requires:
  - node-xmpp
  - request
  - github
+ - moment
  - bluebird*
  - Camelot Unchained account
 
@@ -26,6 +27,7 @@ var fs = require('fs');
 var request = require('request');
 var xmpp = require('node-xmpp');
 var GitHubApi = require('github');
+var moment = require('moment');
 
 var cuRestAPI = require('./cu-rest.js');
 var config = require('./cu-squadbot.cfg');
@@ -218,9 +220,9 @@ var chatCommands = [
                     if (contribList.length > 0) contribList += ", ";
                     contribList += contribUsers[i];
                 }
-                sendReply(server, room, sender, "Contributing users to all monitored groups: " + contribList);
+                sendReply(server, room, sender, "Contributing users to all monitored GitHub groups: " + contribList);
             } else {
-                sendReply(server, room, sender, "No contributors found for monitored groups.");
+                sendReply(server, room, sender, "No contributors found for monitored GitHub groups.");
             }
         });
     }
@@ -236,9 +238,9 @@ var chatCommands = [
                 prs.forEach(function(pr, index) {
                     pullURLs += "\n   " + (index + 1) + ": " + pr.html_url;
                 });
-                sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against all monitored groups:" + pullURLs);
+                sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against all monitored GitHub groups:" + pullURLs);
             } else {
-                sendReply(server, room, sender, "No pull requests found for monitored groups.");
+                sendReply(server, room, sender, "No pull requests found for monitored GitHub groups.");
             }
         });
     }
@@ -254,9 +256,9 @@ var chatCommands = [
                 issues.forEach(function(issue, index) {
                     issueURLs += "\n   " + (index + 1) + ": " + issue.html_url;
                 });
-                sendReply(server, room, sender, "There are currently " + issues.length + " issues open against all monitored groups:" + issueURLs);
+                sendReply(server, room, sender, "There are currently " + issues.length + " issues open against all monitored GitHub groups:" + issueURLs);
             } else {
-                sendReply(server, room, sender, "No issues found for monitored groups.");
+                sendReply(server, room, sender, "No issues found for monitored GitHub groups.");
             }
         })
     }
@@ -430,6 +432,27 @@ function getParams(command, message, index) {
     } else {
         return -1;
     }
+}
+
+// function to read in the saved GitHub pull request data
+function getGitHubData() {
+    fs.readFile(config.githubFile, function(err, data) {
+        if (err && err.code === 'ENOENT') {
+            githubData = {
+                lastCommit: "2013-01-01T00:00:00.000Z",
+                lastIssue: "2013-01-01T00:00:00.000Z",
+                lastPR: "2013-01-01T00:00:00.000Z"
+            };
+            fs.writeFile(config.githubFile, JSON.stringify(githubData), function(err) {
+                if (err) {
+                    return util.log("[ERROR] Unable to create GitHub data file.");
+                }
+                util.log("[STATUS] GitHub data file did not exist. Empty file created.");
+            });
+        } else {
+            githubData = JSON.parse(data);
+        }
+    });
 }
 
 // function to authenticate with GitHub API
@@ -630,16 +653,83 @@ function checkLastStanza(server) {
 }
 
 // Timer to monitor GitHub and announce updates
-var timerGitHub = function(server) { return setInterval(function() { checkLastStanza(server); }, 30000); };
+var timerGitHub = function(server) { return setInterval(function() { checkGitHub(server); }, 30000); };
 function checkGitHub(server) {
+    var curISODate = new Date().toISOString();
 
+    // Check for any new issues
+    var newIssueData = false;
+    var tempLastIssue = githubData.lastIssue;
+    getAllIssues().then(function (issues) {
+        for (i = 0; i < issues.length; i++) {
+            var issue = issues[i];
+            if (! issue.pull_request) {
+                var diff = moment(issue.updated_at).diff(githubData.lastIssue);
+                if (diff > 0) {
+                    // Save new PR date
+                    if (moment(issue.updated_at).diff(tempLastIssue) > 0) tempLastIssue = issue.updated_at;
+                    newIssueData = true;
 
-    var epochTime = Math.floor((new Date).getTime() / 1000);
-    if (epochTime - server.lastStanza > 65) {
-        util.log("[ERROR] No stanza for 65 seconds on " + server.name + ". Reconnecting...");
-        server.lastStanza = epochTime;
-        restartClient(server);
-    }
+                    // Announce new information to chat room
+                    if (issue.created_at !== issue.updated_at) {
+                        var chatMessage = "An existing issue has been updated by " + issue.user.login + ":" +
+                        "\n" + issue.html_url;
+                    } else {
+                        var chatMessage = "A new issue has been opened by " + issue.user.login + ":" +
+                        "\n" + issue.html_url;
+                    }
+                    server.rooms.forEach(function(room) {
+                        if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                    });
+                }
+            }
+        }
+        if (newIssueData) {
+            githubData.lastIssue = tempLastIssue;
+            fs.writeFile(config.githubFile, JSON.stringify(githubData), function(err) {
+                if (err) {
+                    util.log("[ERROR] Unable to write GitHub data file.");
+                }
+                util.log("[STATUS] GitHub data file updated with new information.");
+            });
+        }
+    });
+
+    // Check for any new pull requests
+    var newPRData = false;
+    var tempLastPR = githubData.lastPR;
+    getAllPullRequests().then(function (prs) {
+        for (i = 0; i < prs.length; i++) {
+            var pr = prs[i];
+            var diff = moment(pr.updated_at).diff(githubData.lastPR);
+            if (diff > 0) {
+                // Save new PR date
+                if (moment(pr.updated_at).diff(tempLastPR) > 0) tempLastPR = pr.updated_at;
+                newPRData = true;
+
+                // Announce new information to chat room
+                if (pr.created_at !== pr.updated_at) {
+                    var chatMessage = "An existing pull request has been updated by " + pr.user.login + ":" +
+                    "\n" + pr.html_url;
+                } else {
+                    var chatMessage = "A new pull request has been opened by " + pr.user.login + ":" +
+                    "\n" + pr.html_url;
+                }
+                server.rooms.forEach(function(room) {
+                    if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                });
+            }
+        }
+        if (newPRData) {
+            githubData.lastPR = tempLastPR;
+            fs.writeFile(config.githubFile, JSON.stringify(githubData), function(err) {
+                if (err) {
+                    util.log("[ERROR] Unable to write GitHub data file.");
+                }
+                util.log("[STATUS] GitHub data file updated with new information.");
+            });
+        }
+    });
 }
 
 // Timer to send MOTD messages to joining users.
@@ -724,6 +814,9 @@ function startClient(server) {
 
                 // Start sending MOTDs
                 client[server.name].motdTimer = timerMOTD(server);
+
+                // Start monitoring GitHub activity
+                client[server.name].githubTimer = timerGitHub(server);
 
                 // Start verifying client is still receiving stanzas
                 server.lastStanza = Math.floor((new Date).getTime() / 1000);
@@ -870,6 +963,7 @@ function stopClient(server) {
             room.joined = false;
         });
         clearInterval(client[server.name].motdTimer);
+        clearInterval(client[server.name].githubTimer);
         clearInterval(client[server.name].connTimer);
         client[server.name] = undefined;
     }
@@ -881,9 +975,9 @@ function restartClient(server) {
     startClient(server);
 }
 
-// Initial startup
-var client = [];
-
+// Initial GitHub startup
+var githubData = {};
+getGitHubData();
 var github = new GitHubApi({
     version: "3.0.0",
     debug: false,
@@ -893,8 +987,10 @@ var github = new GitHubApi({
     headers: {
         "user-agent": "CU-SquadBot"
     }
-});    
+});
 
+// Initial XMPP client startup
+var client = [];
 config.servers.forEach(function(server) {
     // Connect to REST API
     server.cuRest = new cuRestAPI(server.name);
