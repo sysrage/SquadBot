@@ -209,30 +209,19 @@ var chatCommands = [
     exec: function(server, room, sender, message, extras) {
         var contribUsers = [];
         var contribList = "";
-        getAllRepos().then(function(repos) {
-            var repoCount = repos.length;
-            repos.forEach(function(repo) {
-                github.repos.getContributors({
-                    user: repo.owner.login,
-                    repo: repo.name
-                }, function(err, res) {
-                    repoCount--;
-                    if (! err) {
-                        for (i = 0; i < res.length; i++) {
-                            if (contribUsers.indexOf(res[i].login) === -1) contribUsers.push(res[i].login);
-                        }
-                    } else {
-                        sendReply(server, room, sender, "Error pulling list of contributors for " + repo.owner.login + "/" + repo.name + ".");
-                    }
-                    if (repoCount === 0) {
-                        for (i = 0; i < contribUsers.length; i++) {
-                            if (contribList.length > 0) contribList += ", ";
-                            contribList += contribUsers[i];
-                        }
-                        sendReply(server, room, sender, "Contributing users to all monitored groups: " + contribList);
-                    }
-                });
-            });
+        getAllContribs().then(function(contribs) {
+            if (contribs.length > 0) {
+                for (i = 0; i < contribs.length; i++) {
+                    if (contribUsers.indexOf(contribs[i].login) === -1) contribUsers.push(contribs[i].login);
+                }
+                for (i = 0; i < contribUsers.length; i++) {
+                    if (contribList.length > 0) contribList += ", ";
+                    contribList += contribUsers[i];
+                }
+                sendReply(server, room, sender, "Contributing users to all monitored groups: " + contribList);
+            } else {
+                sendReply(server, room, sender, "No contributors found for monitored groups.");
+            }
         });
     }
 },
@@ -243,10 +232,14 @@ var chatCommands = [
     exec: function(server, room, sender, message, extras) {
         var pullURLs = "";
         getAllPullRequests().then(function(prs) {
-            prs.forEach(function(pr, index) {
-                pullURLs += "\n   " + (index + 1) + ": " + pr.html_url;
-            });
-            sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against all monitored groups:" + pullURLs);
+            if (prs.length > 0) {
+                prs.forEach(function(pr, index) {
+                    pullURLs += "\n   " + (index + 1) + ": " + pr.html_url;
+                });
+                sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against all monitored groups:" + pullURLs);
+            } else {
+                sendReply(server, room, sender, "No pull requests found for monitored groups.");
+            }
         });
     }
 },
@@ -255,33 +248,17 @@ var chatCommands = [
     help: "The command " + commandChar + "issues displays current issues for all monitored groups on GitHub.\n" +
         "\n" + "Usage: " + commandChar + "issues",
     exec: function(server, room, sender, message, extras) {
-        var issues = [];
         var issueURLs = "";
-        getAllRepos().then(function(repos) {
-            var repoCount = repos.length;
-            repos.forEach(function(repo) {
-                github.issues.repoIssues({
-                    user: repo.owner.login,
-                    repo: repo.name,
-                    state: 'open'
-                }, function(err, res) {
-                    repoCount--;
-                    if (! err) {
-                        for (i = 0; i < res.length; i++) {
-                            if (issues.indexOf(res[i].html_url) === -1) issues.push(res[i].html_url);
-                        }
-                    } else {
-                        sendReply(server, room, sender, "Error pulling list of issues for " + repo.owner.login + "/" + repo.name + ".");
-                    }
-                    if (repoCount === 0) {
-                        for (i = 0; i < issues.length; i++) {
-                            issueURLs += "\n   " + (i + 1) + ": " + issues[i];
-                        }
-                        sendReply(server, room, sender, "There are currently " + issues.length + " issues open against all monitored groups:" + issueURLs);
-                    }
+        getAllIssues().then(function(issues) {
+            if (issues.length > 0) {
+                issues.forEach(function(issue, index) {
+                    issueURLs += "\n   " + (index + 1) + ": " + issue.html_url;
                 });
-            });
-        });
+                sendReply(server, room, sender, "There are currently " + issues.length + " issues open against all monitored groups:" + issueURLs);
+            } else {
+                sendReply(server, room, sender, "No issues found for monitored groups.");
+            }
+        })
     }
 },
 ];
@@ -308,6 +285,57 @@ function checkInternet(server, callback) {
     })
 }
 
+// function to obtain all issues for every repo owned by all monitored users
+function getAllIssues() {
+    return new Promise(function (fulfill, reject) {
+        var allIssues = [];
+        getAllRepos().then(function(repos) {
+            var repoCount = repos.length;
+            repos.forEach(function(repo) {
+                gitAuth();
+                github.issues.repoIssues({
+                    user: repo.owner.login,
+                    repo: repo.name,
+                    state: 'open'
+                }, function(err, res) {
+                    repoCount--;
+                    if (! err) {
+                        allIssues = allIssues.concat(res);
+                    } else {
+                        util.log("[ERROR] Error pulling list of issues for '" + repo.owner.login + "/" + repo.name + "'.");
+                    }
+                    if (repoCount === 0) fulfill(allIssues);
+                });
+            });
+        });
+    });
+}
+
+// function to obtain all contributors for every repo owned by all monitored users
+function getAllContribs() {
+    return new Promise(function (fulfill, reject) {
+        var allContribs = [];
+        getAllRepos().then(function(repos) {
+            var repoCount = repos.length;
+            repos.forEach(function(repo) {
+                gitAuth();
+                github.repos.getContributors({
+                    user: repo.owner.login,
+                    repo: repo.name
+                }, function(err, res) {
+                    repoCount--;
+                    if (! err) {
+                        allContribs = allContribs.concat(res);
+                    } else {
+                        util.log("[ERROR] Error pulling list of contributors for '" + repo.owner.login + "/" + repo.name + "'.");
+                    }
+                    if (repoCount === 0) fulfill(allContribs);
+                });
+            });
+        });
+    });
+}
+
 // function to obtain all pull reqeusts for every repo owned by all monitored users
 function getAllPullRequests() {
     return new Promise(function (fulfill, reject) {
@@ -315,11 +343,7 @@ function getAllPullRequests() {
         getAllRepos().then(function(repos) {
             var repoCount = repos.length;
             repos.forEach(function(repo, index, array) {
-                github.authenticate({
-                    type: "basic",
-                    username: config.githubUsername,
-                    password: config.githubAPIToken
-                });
+                gitAuth();
                 github.pullRequests.getAll({
                     user: repo.owner.login,
                     repo: repo.name
@@ -327,11 +351,10 @@ function getAllPullRequests() {
                     repoCount--;
                     if (! err) {
                         allPullRequests = allPullRequests.concat(res);
-                        if (repoCount === 0) fulfill(allPullRequests);
                     } else {
                         util.log("[ERROR] Error pulling list of pull requests for '" + repo.owner.login + "/" + repo.name + "'.");
-                        if (repoCount === 0) fulfill(allPullRequests);
                     }
+                    if (repoCount === 0) fulfill(allPullRequests);
                 });
             });
         });
@@ -344,22 +367,17 @@ function getAllRepos() {
         var allRepos = [];
         var groupCount = config.githubGroups.length;
         config.githubGroups.forEach(function(ghUser, index, array) {
-            github.authenticate({
-                type: "basic",
-                username: config.githubUsername,
-                password: config.githubAPIToken
-            });
+            gitAuth();
             github.repos.getFromOrg({
                 org: ghUser
             }, function(err, res) {
                 groupCount--;
                 if (! err) {
                     allRepos = allRepos.concat(res);
-                    if (groupCount === 0) fulfill(allRepos);
                 } else {
                     util.log("[ERROR] Error pulling list of repositories for '" + ghUser + "'.");
-                    if (groupCount === 0) fulfill(allRepos);
                 }
+                if (groupCount === 0) fulfill(allRepos);
             });
         });
     });    
@@ -412,6 +430,15 @@ function getParams(command, message, index) {
     } else {
         return -1;
     }
+}
+
+// function to authenticate with GitHub API
+function gitAuth() {
+    github.authenticate({
+        type: "basic",
+        username: config.githubUsername,
+        password: config.githubAPIToken
+    });
 }
 
 // function to find the index of a room
@@ -594,6 +621,19 @@ function sendToIT(message) {
 // Timer to verify client is still connected
 var timerConnected = function(server) { return setInterval(function() { checkLastStanza(server); }, 1000); };
 function checkLastStanza(server) {
+    var epochTime = Math.floor((new Date).getTime() / 1000);
+    if (epochTime - server.lastStanza > 65) {
+        util.log("[ERROR] No stanza for 65 seconds on " + server.name + ". Reconnecting...");
+        server.lastStanza = epochTime;
+        restartClient(server);
+    }
+}
+
+// Timer to monitor GitHub and announce updates
+var timerGitHub = function(server) { return setInterval(function() { checkLastStanza(server); }, 30000); };
+function checkGitHub(server) {
+
+
     var epochTime = Math.floor((new Date).getTime() / 1000);
     if (epochTime - server.lastStanza > 65) {
         util.log("[ERROR] No stanza for 65 seconds on " + server.name + ". Reconnecting...");
@@ -845,16 +885,13 @@ function restartClient(server) {
 var client = [];
 
 var github = new GitHubApi({
-    // required
     version: "3.0.0",
-    // optional
     debug: false,
     protocol: "https",
     host: "api.github.com", 
-    // pathPrefix: "/api/v3", // for some GHEs; none for GitHub
     timeout: 5000,
     headers: {
-        "user-agent": "CU-SquadBot" // GitHub is happy with a unique user agent
+        "user-agent": "CU-SquadBot"
     }
 });    
 
