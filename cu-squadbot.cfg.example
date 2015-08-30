@@ -21,14 +21,25 @@ module.exports = {
         motdFile: './hatchery.motd',
         nomotdFile: './hatchery.nomotd',
         rooms: [
-            { name: '_squadbot', joined: false, motd: true, monitor: true, announce: true},
+            { name: '_modsquad', joined: false, motd: true, monitor: true, announce: true},
         ],
+        allowPMCommands: true,
     },
     ],
 
     // Users without CSE flag which can set MOTD messages
     motdAdmins: [
         'user'
+    ],
+
+    // GitHub access details
+    githubUsername: 'user',
+    githubAPIToken: 'abcd1234kljsdf54689skdlfj',
+
+    // All base GitHub users to monitor for repositories
+    githubGroups: [
+        'csegames',
+        'CUModSquad'
     ],
 
     // Keyword regular expressions to watch for which match test CSE messages

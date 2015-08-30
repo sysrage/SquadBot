@@ -6,6 +6,7 @@ Requires:
  - Node.js 11.x
  - node-xmpp
  - request
+ - github
  - bluebird*
  - Camelot Unchained account
 
@@ -24,6 +25,7 @@ var path = require('path');
 var fs = require('fs');
 var request = require('request');
 var xmpp = require('node-xmpp');
+var GitHubApi = require('github');
 
 var cuRestAPI = require('./cu-rest.js');
 var config = require('./cu-squadbot.cfg');
@@ -55,9 +57,9 @@ var chatCommands = [
 { // #### BOTINFO COMMAND ####
     command: 'botinfo',
     help: "The command " + commandChar + "botinfo displays information about this chatbot.\n" +
-        "\n" + "Usage: " + commandChar + "botinfo", 
+        "\n" + "Usage: " + commandChar + "botinfo",
     exec: function(server, room, sender, message, extras) {
-        sendReply(server, room, sender, "The bot is written in Node.js and is running on an OpenShift gear. Source code for the bot can be found here: https://github.com/sysrage/cu-chatbot" +
+        sendReply(server, room, sender, "The bot is written in Node.js and is running on an OpenShift gear. Source code for the bot can be found here: https://github.com/CUModSquad/SquadBot" +
             "\n\nMuch thanks to the CU Mod Squad for their help.");
     }
 },
@@ -200,6 +202,88 @@ var chatCommands = [
         }
     }
 },
+{ // #### CONTRIBS COMMAND ####
+    command: 'contribs',
+    help: "The command " + commandChar + "contribs displays all contributors to monitored groups on GitHub.\n" +
+        "\n" + "Usage: " + commandChar + "contribs",
+    exec: function(server, room, sender, message, extras) {
+        var contribUsers = [];
+        var contribList = "";
+        getAllRepos().then(function(repos) {
+            var repoCount = repos.length;
+            repos.forEach(function(repo) {
+                github.repos.getContributors({
+                    user: repo.owner.login,
+                    repo: repo.name
+                }, function(err, res) {
+                    repoCount--;
+                    if (! err) {
+                        for (i = 0; i < res.length; i++) {
+                            if (contribUsers.indexOf(res[i].login) === -1) contribUsers.push(res[i].login);
+                        }
+                    } else {
+                        sendReply(server, room, sender, "Error pulling list of contributors for " + repo.owner.login + "/" + repo.name + ".");
+                    }
+                    if (repoCount === 0) {
+                        for (i = 0; i < contribUsers.length; i++) {
+                            if (contribList.length > 0) contribList += ", ";
+                            contribList += contribUsers[i];
+                        }
+                        sendReply(server, room, sender, "Contributing users to all monitored groups: " + contribList);
+                    }
+                });
+            });
+        });
+    }
+},
+{ // #### PRS COMMAND ####
+    command: 'prs',
+    help: "The command " + commandChar + "prs displays current pull requests for all monitored groups on GitHub.\n" +
+        "\n" + "Usage: " + commandChar + "prs",
+    exec: function(server, room, sender, message, extras) {
+        var pullURLs = "";
+        getAllPullRequests().then(function(prs) {
+            prs.forEach(function(pr, index) {
+                pullURLs += "\n   " + (index + 1) + ": " + pr.html_url;
+            });
+            sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against all monitored groups:" + pullURLs);
+        });
+    }
+},
+{ // #### ISSUES COMMAND ####
+    command: 'issues',
+    help: "The command " + commandChar + "issues displays current issues for all monitored groups on GitHub.\n" +
+        "\n" + "Usage: " + commandChar + "issues",
+    exec: function(server, room, sender, message, extras) {
+        var issues = [];
+        var issueURLs = "";
+        getAllRepos().then(function(repos) {
+            var repoCount = repos.length;
+            repos.forEach(function(repo) {
+                github.issues.repoIssues({
+                    user: repo.owner.login,
+                    repo: repo.name,
+                    state: 'open'
+                }, function(err, res) {
+                    repoCount--;
+                    if (! err) {
+                        for (i = 0; i < res.length; i++) {
+                            if (issues.indexOf(res[i].html_url) === -1) issues.push(res[i].html_url);
+                        }
+                    } else {
+                        sendReply(server, room, sender, "Error pulling list of issues for " + repo.owner.login + "/" + repo.name + ".");
+                    }
+                    if (repoCount === 0) {
+                        for (i = 0; i < issues.length; i++) {
+                            issueURLs += "\n   " + (i + 1) + ": " + issues[i];
+                        }
+                        sendReply(server, room, sender, "There are currently " + issues.length + " issues open against all monitored groups:" + issueURLs);
+                    }
+                });
+            });
+        });
+    }
+},
 ];
 
 // Add list of available commands to the output of !help
@@ -222,6 +306,63 @@ function checkInternet(server, callback) {
             callback(true);
         }
     })
+}
+
+// function to obtain all pull reqeusts for every repo owned by all monitored users
+function getAllPullRequests() {
+    return new Promise(function (fulfill, reject) {
+        var allPullRequests = [];
+        getAllRepos().then(function(repos) {
+            var repoCount = repos.length;
+            repos.forEach(function(repo, index, array) {
+                github.authenticate({
+                    type: "basic",
+                    username: config.githubUsername,
+                    password: config.githubAPIToken
+                });
+                github.pullRequests.getAll({
+                    user: repo.owner.login,
+                    repo: repo.name
+                }, function(err, res) {
+                    repoCount--;
+                    if (! err) {
+                        allPullRequests = allPullRequests.concat(res);
+                        if (repoCount === 0) fulfill(allPullRequests);
+                    } else {
+                        util.log("[ERROR] Error pulling list of pull requests for '" + repo.owner.login + "/" + repo.name + "'.");
+                        if (repoCount === 0) fulfill(allPullRequests);
+                    }
+                });
+            });
+        });
+    });
+}
+
+// function to obtain all repos owned by all monitored groups
+function getAllRepos() {
+    return new Promise(function (fulfill, reject) {
+        var allRepos = [];
+        var groupCount = config.githubGroups.length;
+        config.githubGroups.forEach(function(ghUser, index, array) {
+            github.authenticate({
+                type: "basic",
+                username: config.githubUsername,
+                password: config.githubAPIToken
+            });
+            github.repos.getFromOrg({
+                org: ghUser
+            }, function(err, res) {
+                groupCount--;
+                if (! err) {
+                    allRepos = allRepos.concat(res);
+                    if (groupCount === 0) fulfill(allRepos);
+                } else {
+                    util.log("[ERROR] Error pulling list of repositories for '" + ghUser + "'.");
+                    if (groupCount === 0) fulfill(allRepos);
+                }
+            });
+        });
+    });    
 }
 
 // function to read in the MOTD file
@@ -656,7 +797,7 @@ function startClient(server) {
                     } else motdadmin = false;
 
                     // If message matches a defined command, run it
-                    if (message[0] === commandChar) {
+                    if (message[0] === commandChar && server.allowPMCommands) {
                         var userCommand = message.split(' ')[0].split(commandChar)[1];
                         chatCommands.forEach(function(cmd) {
                             if (userCommand === cmd.command) {
@@ -702,6 +843,21 @@ function restartClient(server) {
 
 // Initial startup
 var client = [];
+
+var github = new GitHubApi({
+    // required
+    version: "3.0.0",
+    // optional
+    debug: false,
+    protocol: "https",
+    host: "api.github.com", 
+    // pathPrefix: "/api/v3", // for some GHEs; none for GitHub
+    timeout: 5000,
+    headers: {
+        "user-agent": "CU-SquadBot" // GitHub is happy with a unique user agent
+    }
+});    
+
 config.servers.forEach(function(server) {
     // Connect to REST API
     server.cuRest = new cuRestAPI(server.name);
