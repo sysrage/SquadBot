@@ -461,9 +461,9 @@ function getGitHubData() {
     fs.readFile(config.githubFile, function(err, data) {
         if (err && err.code === 'ENOENT') {
             githubData = {
-                lastCommit: "2013-01-01T00:00:00.000Z",
-                lastIssue: "2013-01-01T00:00:00.000Z",
-                lastPR: "2013-01-01T00:00:00.000Z"
+                lastCommit: "2007-10-01T00:00:00.000Z",
+                lastIssue: "2007-10-01T00:00:00.000Z",
+                lastPR: "2007-10-01T00:00:00.000Z"
             };
             fs.writeFile(config.githubFile, JSON.stringify(githubData), function(err) {
                 if (err) {
@@ -705,7 +705,7 @@ function checkGitHub(server) {
                         "\n" + event.payload.issue.html_url;
                     }
                     server.rooms.forEach(function(room) {
-                        if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                        if (room.announce && githubData.lastIssue !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
                     });
                 }
             }
@@ -726,7 +726,7 @@ function checkGitHub(server) {
                         "\n" + event.payload.pull_request.html_url;
                     }
                     server.rooms.forEach(function(room) {
-                        if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                        if (room.announce && githubData.lastPR !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
                     });
                 }
             }
@@ -749,7 +749,7 @@ function checkGitHub(server) {
                             "\n" + event.payload.issue.html_url;
                         }
                         server.rooms.forEach(function(room) {
-                            if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                            if (room.announce && githubData.lastPR !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
                         });
                     }
                 } else {
@@ -769,7 +769,7 @@ function checkGitHub(server) {
                             "\n" + event.payload.issue.html_url;
                         }
                         server.rooms.forEach(function(room) {
-                            if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                            if (room.announce && githubData.lastIssue !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
                         });
                     }
                 }
