@@ -36,6 +36,9 @@ module.exports = {
     githubUsername: 'user',
     githubAPIToken: 'abcd1234kljsdf54689skdlfj',
 
+    // GitHub saved data location
+    githubFile: './github.data',
+
     // All base GitHub users to monitor for repositories
     githubGroups: [
         'csegames',
