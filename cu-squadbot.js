@@ -287,6 +287,53 @@ function checkInternet(server, callback) {
     })
 }
 
+// function to obtain all contributors for every repo owned by all monitored users
+function getAllContribs() {
+    return new Promise(function (fulfill, reject) {
+        var allContribs = [];
+        getAllRepos().then(function(repos) {
+            var repoCount = repos.length;
+            repos.forEach(function(repo) {
+                gitAuth();
+                github.repos.getContributors({
+                    user: repo.owner.login,
+                    repo: repo.name
+                }, function(err, res) {
+                    repoCount--;
+                    if (! err) {
+                        allContribs = allContribs.concat(res);
+                    } else {
+                        util.log("[ERROR] Error pulling list of contributors for '" + repo.owner.login + "/" + repo.name + "'.");
+                    }
+                    if (repoCount === 0) fulfill(allContribs);
+                });
+            });
+        });
+    });
+}
+
+// function to obtain all events for every repo owned by all monitored users
+function getAllEvents() {
+    return new Promise(function (fulfill, reject) {
+        var allEvents = [];
+        var groupCount = config.githubGroups.length;
+        config.githubGroups.forEach(function(ghUser, index, array) {
+            gitAuth();
+            github.events.getFromOrg({
+                org: ghUser
+            }, function(err, res) {
+                groupCount--;
+                if (! err) {
+                    allEvents = allEvents.concat(res);
+                } else {
+                    util.log("[ERROR] Error pulling list of events for '" + ghUser + "'.");
+                }
+                if (groupCount === 0) fulfill(allEvents);
+            });
+        });
+    });
+}
+
 // function to obtain all issues for every repo owned by all monitored users
 function getAllIssues() {
     return new Promise(function (fulfill, reject) {
@@ -307,31 +354,6 @@ function getAllIssues() {
                         util.log("[ERROR] Error pulling list of issues for '" + repo.owner.login + "/" + repo.name + "'.");
                     }
                     if (repoCount === 0) fulfill(allIssues);
-                });
-            });
-        });
-    });
-}
-
-// function to obtain all contributors for every repo owned by all monitored users
-function getAllContribs() {
-    return new Promise(function (fulfill, reject) {
-        var allContribs = [];
-        getAllRepos().then(function(repos) {
-            var repoCount = repos.length;
-            repos.forEach(function(repo) {
-                gitAuth();
-                github.repos.getContributors({
-                    user: repo.owner.login,
-                    repo: repo.name
-                }, function(err, res) {
-                    repoCount--;
-                    if (! err) {
-                        allContribs = allContribs.concat(res);
-                    } else {
-                        util.log("[ERROR] Error pulling list of contributors for '" + repo.owner.login + "/" + repo.name + "'.");
-                    }
-                    if (repoCount === 0) fulfill(allContribs);
                 });
             });
         });
@@ -656,71 +678,105 @@ function checkLastStanza(server) {
 var timerGitHub = function(server) { return setInterval(function() { checkGitHub(server); }, 30000); };
 function checkGitHub(server) {
     var curISODate = new Date().toISOString();
-
-    // Check for any new issues
     var newIssueData = false;
+    var newPRData = false;
     var tempLastIssue = githubData.lastIssue;
-    getAllIssues().then(function (issues) {
-        for (i = 0; i < issues.length; i++) {
-            var issue = issues[i];
-            if (! issue.pull_request) {
-                var diff = moment(issue.updated_at).diff(githubData.lastIssue);
+    var tempLastPR = githubData.lastPR;
+
+    // Poll for all events
+    getAllEvents().then(function(events) {
+        for (i = 0; i < events.length; i++) {
+            var event = events[i];
+
+            // Handle Issue Events
+            if (event.type === 'IssuesEvent') {
+                var diff = moment(event.payload.issue.updated_at).diff(githubData.lastIssue);
                 if (diff > 0) {
-                    // Save new PR date
-                    if (moment(issue.updated_at).diff(tempLastIssue) > 0) tempLastIssue = issue.updated_at;
+                    // Save new issue date
+                    if (moment(event.payload.issue.updated_at).diff(tempLastIssue) > 0) tempLastIssue = event.payload.issue.updated_at;
                     newIssueData = true;
 
                     // Announce new information to chat room
-                    if (issue.created_at !== issue.updated_at) {
-                        var chatMessage = "An existing issue has been updated by " + issue.user.login + ":" +
-                        "\n" + issue.html_url;
+                    if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
+                        var chatMessage = "An existing issue for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                        "\n" + event.payload.issue.html_url;
                     } else {
-                        var chatMessage = "A new issue has been opened by " + issue.user.login + ":" +
-                        "\n" + issue.html_url;
+                        var chatMessage = "A new issue for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
+                        "\n" + event.payload.issue.html_url;
                     }
                     server.rooms.forEach(function(room) {
                         if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
                     });
                 }
             }
-        }
-        if (newIssueData) {
-            githubData.lastIssue = tempLastIssue;
-            fs.writeFile(config.githubFile, JSON.stringify(githubData), function(err) {
-                if (err) {
-                    util.log("[ERROR] Unable to write GitHub data file.");
+
+            if (event.type === 'PullRequestEvent') {
+                var diff = moment(event.payload.pull_request.updated_at).diff(githubData.lastPR);
+                if (diff > 0) {
+                    // Save new PR date
+                    if (moment(event.payload.pull_request.updated_at).diff(tempLastPR) > 0) tempLastPR = event.payload.pull_request.updated_at;
+                    newPRData = true;
+
+                    // Announce new information to chat room
+                    if (event.payload.pull_request.created_at !== event.payload.pull_request.updated_at) {
+                        var chatMessage = "An existing pull request for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                        "\n" + event.payload.pull_request.html_url;
+                    } else {
+                        var chatMessage = "A new pull request for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
+                        "\n" + event.payload.pull_request.html_url;
+                    }
+                    server.rooms.forEach(function(room) {
+                        if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                    });
                 }
-                util.log("[STATUS] GitHub data file updated with new information.");
-            });
-        }
-    });
+            }
 
-    // Check for any new pull requests
-    var newPRData = false;
-    var tempLastPR = githubData.lastPR;
-    getAllPullRequests().then(function (prs) {
-        for (i = 0; i < prs.length; i++) {
-            var pr = prs[i];
-            var diff = moment(pr.updated_at).diff(githubData.lastPR);
-            if (diff > 0) {
-                // Save new PR date
-                if (moment(pr.updated_at).diff(tempLastPR) > 0) tempLastPR = pr.updated_at;
-                newPRData = true;
+            if (event.type === 'IssueCommentEvent') {
+                if (event.payload.issue.pull_request) {
+                    // Comment is for a pull request
+                    var diff = moment(event.payload.issue.updated_at).diff(githubData.lastPR);
+                    if (diff > 0) {
+                        // Save new PR date
+                        if (moment(event.payload.issue.updated_at).diff(tempLastPR) > 0) tempLastPR = event.payload.issue.updated_at;
+                        newPRData = true;
 
-                // Announce new information to chat room
-                if (pr.created_at !== pr.updated_at) {
-                    var chatMessage = "An existing pull request has been updated by " + pr.user.login + ":" +
-                    "\n" + pr.html_url;
+                        // Announce new information to chat room
+                        if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
+                            var chatMessage = "An existing pull request for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                            "\n" + event.payload.issue.html_url;
+                        } else {
+                            var chatMessage = "A new pull request for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
+                            "\n" + event.payload.issue.html_url;
+                        }
+                        server.rooms.forEach(function(room) {
+                            if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                        });
+                    }
                 } else {
-                    var chatMessage = "A new pull request has been opened by " + pr.user.login + ":" +
-                    "\n" + pr.html_url;
+                    // Comment is for an issue
+                    var diff = moment(event.payload.issue.updated_at).diff(githubData.lastIssue);
+                    if (diff > 0) {
+                        // Save new issue date
+                        if (moment(event.payload.issue.updated_at).diff(tempLastIssue) > 0) tempLastIssue = event.payload.issue.updated_at;
+                        newIssueData = true;
+
+                        // Announce new information to chat room
+                        if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
+                            var chatMessage = "An existing issue for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                            "\n" + event.payload.issue.html_url;
+                        } else {
+                            var chatMessage = "A new issue for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
+                            "\n" + event.payload.issue.html_url;
+                        }
+                        server.rooms.forEach(function(room) {
+                            if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                        });
+                    }
                 }
-                server.rooms.forEach(function(room) {
-                    if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
-                });
             }
         }
-        if (newPRData) {
+        if (newIssueData || newPRData) {
+            githubData.lastIssue = tempLastIssue;
             githubData.lastPR = tempLastPR;
             fs.writeFile(config.githubFile, JSON.stringify(githubData), function(err) {
                 if (err) {
