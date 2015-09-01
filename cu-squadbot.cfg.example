@@ -40,7 +40,7 @@ module.exports = {
     githubFile: './github.data',
 
     // All base GitHub users to monitor for repositories
-    githubGroups: [
+    githubOrgs: [
         'csegames',
         'CUModSquad'
     ],
