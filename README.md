@@ -3,13 +3,12 @@ An XMPP Chat bot for Mod Squad
 
 ### Implemented Commands:
 
- * **!contribs** - This shows all contributors to any of the monitored GitHub organizations. 
- * **!issues [filter]** - This shows all open issues for any of the repos owned by the monitored GitHub organizations. If the [filter] parameter is supplied, results will be filtered. The filter format can be 'organization', 'repo', or 'organization/repo'.
+ * **!contribs** - This shows all contributors to any of the monitored GitHub groups. 
+ * **!issues** - This shows all open issues for any of the repos owned by any of the monitored GitHub groups.
  * **!motd** - This can show a Mod Squad MOTD.
  * **!motdon** - Subscribe to MOTD notices when joining the channel (currently does nothing).
  * **!motdoff** - Unsubscribe from MOTD notices when joining the channel (currently does nothing).
- * **!prs [filter]** - This shows all open pull requests for any of the repos owned by the monitored GitHub organizations. If the [filter] parameter is supplied, results will be filtered. The filter format can be 'organization', 'repo', or 'organization/repo'.
- * **!repos [org]** - This shows all repositories for the monitored GitHub organizations. If the [org] parameter is supplied, only repositories for that organization will be shown.
+ * **!prs** - This shows all open pull requests for any of the repos owned by any of the monitored GitHub groups.
  * **!tips** - This can show tips related to Mod Squad activities.
 
 ### Current Features:
@@ -18,7 +17,7 @@ An XMPP Chat bot for Mod Squad
  * The bot will monitor the GitHub API and automatically announce new or updated issues to the Mod Squad conference room.
  
 ### Planned Features:
- * Add !whois command to list GitHub, Trello, and CSE usernames for each Mod Squad member.
- * Add !useradd command to add Mod Squad users (for use with !whois command).
+ * Allow filtering of !issues and !prs based on supplied repo name.
+ * Add !repos to view all monitored repositories.
  * The bot will monitor the Trello API and automatically announce new or updated cards.
  
