@@ -65,36 +65,45 @@ var chatCommands = [
             "\n\nMuch thanks to the CU Mod Squad for their help.");
     }
 },
-{ // #### TIPS COMMAND ####
-    command: 'tips',
-    help: "The command " + commandChar + "tips displays tips for new Mod Squad members.\n" +
-        "\n" + "Usage: " + commandChar + "tips [user]\n" +
-        "\nIf [user] is specified, tips will be sent to that user. If 'chat' is specified as the user, tips will be sent to chat.", 
+{ // #### CONTRIBS COMMAND ####
+    command: 'contribs',
+    help: "The command " + commandChar + "contribs displays all contributors to monitored groups on GitHub.\n" +
+        "\n" + "Usage: " + commandChar + "contribs",
     exec: function(server, room, sender, message, extras) {
-        var params = getParams(this.command, message);
-        if (params.length > 0) {
-            var pn = params.split(' ')[0].toLowerCase();
-            if (pn !== 'chat') {
-                if (room === 'pm') {
-                    // Only allow tips requested via PM to be sent to requester to avoid abuse
-                    sendReply(server, room, sender, "Tips sent to " + sender.split("@")[0] + ".");
-                } else {
-                    // send message as PM to specified user
-                    sendReply(server, room, sender, "Tips sent to " + pn + ".");
-                    room = 'pm';
-                    sender = pn + '@' + server.address;
+        var contribUsers = [];
+        var contribList = "";
+        getAllContribs().then(function(contribs) {
+            if (contribs.length > 0) {
+                for (i = 0; i < contribs.length; i++) {
+                    if (contribUsers.indexOf(contribs[i].login) === -1) contribUsers.push(contribs[i].login);
                 }
+                for (i = 0; i < contribUsers.length; i++) {
+                    if (contribList.length > 0) contribList += ", ";
+                    contribList += contribUsers[i];
+                }
+                sendReply(server, room, sender, "Contributing users to all monitored GitHub groups: " + contribList);
+            } else {
+                sendReply(server, room, sender, "No contributors found for monitored GitHub groups.");
             }
-        } else {
-            // send message as PM to user calling !tips
-            sendReply(server, room, sender, "Tips sent to " + sender.split("@")[0] + ".");
-            if (room !== 'pm') {
-                room = 'pm';
-                sender = sender + '@' + server.address;               
+        });
+    }
+},
+{ // #### ISSUES COMMAND ####
+    command: 'issues',
+    help: "The command " + commandChar + "issues displays current issues for all monitored groups on GitHub.\n" +
+        "\n" + "Usage: " + commandChar + "issues",
+    exec: function(server, room, sender, message, extras) {
+        var issueURLs = "";
+        getAllIssues().then(function(issues) {
+            if (issues.length > 0) {
+                issues.forEach(function(issue, index) {
+                    issueURLs += "\n   " + (index + 1) + ": " + issue.html_url;
+                });
+                sendReply(server, room, sender, "There are currently " + issues.length + " issues open against all monitored GitHub groups:" + issueURLs);
+            } else {
+                sendReply(server, room, sender, "No issues found for monitored GitHub groups.");
             }
-        }
-
-        sendReply(server, room, sender, "Quick Tips: Welcome to the Mod Squad. Tips coming soon(tm)!");
+        })
     }
 },
 { // #### MOTD COMMAND ####
@@ -204,29 +213,6 @@ var chatCommands = [
         }
     }
 },
-{ // #### CONTRIBS COMMAND ####
-    command: 'contribs',
-    help: "The command " + commandChar + "contribs displays all contributors to monitored groups on GitHub.\n" +
-        "\n" + "Usage: " + commandChar + "contribs",
-    exec: function(server, room, sender, message, extras) {
-        var contribUsers = [];
-        var contribList = "";
-        getAllContribs().then(function(contribs) {
-            if (contribs.length > 0) {
-                for (i = 0; i < contribs.length; i++) {
-                    if (contribUsers.indexOf(contribs[i].login) === -1) contribUsers.push(contribs[i].login);
-                }
-                for (i = 0; i < contribUsers.length; i++) {
-                    if (contribList.length > 0) contribList += ", ";
-                    contribList += contribUsers[i];
-                }
-                sendReply(server, room, sender, "Contributing users to all monitored GitHub groups: " + contribList);
-            } else {
-                sendReply(server, room, sender, "No contributors found for monitored GitHub groups.");
-            }
-        });
-    }
-},
 { // #### PRS COMMAND ####
     command: 'prs',
     help: "The command " + commandChar + "prs displays current pull requests for all monitored groups on GitHub.\n" +
@@ -245,22 +231,78 @@ var chatCommands = [
         });
     }
 },
-{ // #### ISSUES COMMAND ####
-    command: 'issues',
-    help: "The command " + commandChar + "issues displays current issues for all monitored groups on GitHub.\n" +
-        "\n" + "Usage: " + commandChar + "issues",
+{ // #### REPOS COMMAND ####
+    command: 'repos',
+    help: "The command " + commandChar + "repos displays current repositories for all monitored groups on GitHub.\n" +
+        "\n" + "Usage: " + commandChar + "repos",
     exec: function(server, room, sender, message, extras) {
-        var issueURLs = "";
-        getAllIssues().then(function(issues) {
-            if (issues.length > 0) {
-                issues.forEach(function(issue, index) {
-                    issueURLs += "\n   " + (index + 1) + ": " + issue.html_url;
-                });
-                sendReply(server, room, sender, "There are currently " + issues.length + " issues open against all monitored GitHub groups:" + issueURLs);
-            } else {
-                sendReply(server, room, sender, "No issues found for monitored GitHub groups.");
+        var repoURLs = "";
+
+        var params = getParams(this.command, message);
+        if (params.length > 0) {
+            var gn = params.split(' ')[0].toLowerCase();
+            var gnFound = false;
+            for (i = 0; i < config.githubGroups.length; i++) {
+                if (config.githubGroups[i].toLowerCase() === gn) {
+                    gnFound = true;
+                    break;
+                }
             }
-        })
+            if (gnFound) {
+                // first parameter is a group name
+                params = params.slice(gn.length + 1);
+                var targetGroup = gn;
+                var targetGroupText = "the GitHub group '" + gn + "'";
+            } else {
+                return sendReply(server, room, sender, "Not currently monitoring a group named '" + gn + "'.");
+            }
+        } else {
+            var targetGroup = null;
+            var targetGroupText = "all monitored GitHub groups";
+        }
+
+        getAllRepos(targetGroup).then(function(repos) {
+            if (repos.length > 0) {
+                repos.forEach(function(repo, index) {
+                    repoURLs += "\n   " + (index + 1) + ": " + repo.full_name + " - " + repo.html_url;
+                });
+                sendReply(server, room, sender, "There are currently " + repos.length + " repositories within " + targetGroupText + ":" + repoURLs);
+            } else {
+                sendReply(server, room, sender, "No repositories found for " + targetGroupText + ".");
+            }
+        });
+    }
+},
+{ // #### TIPS COMMAND ####
+    command: 'tips',
+    help: "The command " + commandChar + "tips displays tips for new Mod Squad members.\n" +
+        "\n" + "Usage: " + commandChar + "tips [user]\n" +
+        "\nIf [user] is specified, tips will be sent to that user. If 'chat' is specified as the user, tips will be sent to chat.", 
+    exec: function(server, room, sender, message, extras) {
+        var params = getParams(this.command, message);
+        if (params.length > 0) {
+            var pn = params.split(' ')[0].toLowerCase();
+            if (pn !== 'chat') {
+                if (room === 'pm') {
+                    // Only allow tips requested via PM to be sent to requester to avoid abuse
+                    sendReply(server, room, sender, "Tips sent to " + sender.split("@")[0] + ".");
+                } else {
+                    // send message as PM to specified user
+                    sendReply(server, room, sender, "Tips sent to " + pn + ".");
+                    room = 'pm';
+                    sender = pn + '@' + server.address;
+                }
+            }
+        } else {
+            // send message as PM to user calling !tips
+            sendReply(server, room, sender, "Tips sent to " + sender.split("@")[0] + ".");
+            if (room !== 'pm') {
+                room = 'pm';
+                sender = sender + '@' + server.address;               
+            }
+        }
+
+        sendReply(server, room, sender, "Quick Tips: Welcome to the Mod Squad. Tips coming soon(tm)!");
     }
 },
 ];
@@ -386,11 +428,17 @@ function getAllPullRequests() {
 }
 
 // function to obtain all repos owned by all monitored groups
-function getAllRepos() {
+function getAllRepos(group) {
     return new Promise(function (fulfill, reject) {
         var allRepos = [];
-        var groupCount = config.githubGroups.length;
-        config.githubGroups.forEach(function(ghUser, index, array) {
+        if (group) {
+            var groupsToSearch = [group];
+        } else {
+            var groupsToSearch = config.githubGroups;
+        }
+        var groupCount = groupsToSearch.length;
+
+        groupsToSearch.forEach(function(ghUser, index, array) {
             gitAuth();
             github.repos.getFromOrg({
                 org: ghUser
