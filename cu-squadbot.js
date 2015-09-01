@@ -59,42 +59,72 @@ var chatCommands = [
 { // #### BOTINFO COMMAND ####
     command: 'botinfo',
     help: "The command " + commandChar + "botinfo displays information about this chatbot.\n" +
-        "\n" + "Usage: " + commandChar + "botinfo",
+        "\nUsage: " + commandChar + "botinfo",
     exec: function(server, room, sender, message, extras) {
         sendReply(server, room, sender, "The bot is written in Node.js and is running on an OpenShift gear. Source code for the bot can be found here: https://github.com/CUModSquad/SquadBot" +
             "\n\nMuch thanks to the CU Mod Squad for their help.");
     }
 },
-{ // #### TIPS COMMAND ####
-    command: 'tips',
-    help: "The command " + commandChar + "tips displays tips for new Mod Squad members.\n" +
-        "\n" + "Usage: " + commandChar + "tips [user]\n" +
-        "\nIf [user] is specified, tips will be sent to that user. If 'chat' is specified as the user, tips will be sent to chat.", 
+{ // #### CONTRIBS COMMAND ####
+    command: 'contribs',
+    help: "The command " + commandChar + "contribs displays all contributors to monitored GitHub organizations.\n" +
+        "\nUsage: " + commandChar + "contribs",
     exec: function(server, room, sender, message, extras) {
+        var contribUsers = [];
+        var contribList = "";
+        getAllContribs().then(function(contribs) {
+            if (contribs.length > 0) {
+                for (i = 0; i < contribs.length; i++) {
+                    if (contribUsers.indexOf(contribs[i].login) === -1) contribUsers.push(contribs[i].login);
+                }
+                for (i = 0; i < contribUsers.length; i++) {
+                    if (contribList.length > 0) contribList += ", ";
+                    contribList += contribUsers[i];
+                }
+                sendReply(server, room, sender, "Contributing users to all monitored GitHub organizations: " + contribList);
+            } else {
+                sendReply(server, room, sender, "No contributors found for monitored GitHub organizations.");
+            }
+        });
+    }
+},
+{ // #### ISSUES COMMAND ####
+    command: 'issues',
+    help: "The command " + commandChar + "issues displays current issues for all monitored GitHub organizations.\n" +
+        "\nUsage: " + commandChar + "issues [filter]" +
+        "\nIf [filter] is specified, displayed issues will be filtered. Otherwise, issues for all monitored organizations will be displayed.",
+    exec: function(server, room, sender, message, extras) {
+        var issueURLs = "";
+
         var params = getParams(this.command, message);
         if (params.length > 0) {
-            var pn = params.split(' ')[0].toLowerCase();
-            if (pn !== 'chat') {
-                if (room === 'pm') {
-                    // Only allow tips requested via PM to be sent to requester to avoid abuse
-                    sendReply(server, room, sender, "Tips sent to " + sender.split("@")[0] + ".");
-                } else {
-                    // send message as PM to specified user
-                    sendReply(server, room, sender, "Tips sent to " + pn + ".");
-                    room = 'pm';
-                    sender = pn + '@' + server.address;
-                }
-            }
+            var filter = params.split(' ')[0];
+            var targetOrgText = "the GitHub filter '" + filter + "'";
         } else {
-            // send message as PM to user calling !tips
-            sendReply(server, room, sender, "Tips sent to " + sender.split("@")[0] + ".");
-            if (room !== 'pm') {
-                room = 'pm';
-                sender = sender + '@' + server.address;               
-            }
+            var filter = null;
+            var targetOrgText = "all monitored GitHub organizations";
         }
 
-        sendReply(server, room, sender, "Quick Tips: Welcome to the Mod Squad. Tips coming soon(tm)!");
+        getAllIssues(filter).then(function(issues) {
+            if (issues.length > 0) {
+                if (! filter && issues.length > 5) {
+                    for (var i = 0; i < 5; i++) {
+                        issueURLs += "\n   " + (i + 1) + ": " + issues[i].html_url;
+                    }
+                    sendReply(server, room, sender, "There are currently " + issues.length + " issues open against " + targetOrgText + ":" + issueURLs +
+                        "\n To display more than the first 5 issues, include a filter in your command.");
+                } else {
+                    issues.forEach(function(issue, index) {
+                        issueURLs += "\n   " + (index + 1) + ": " + issue.html_url;
+                    });
+                    sendReply(server, room, sender, "There are currently " + issues.length + " issues open against " + targetOrgText + ":" + issueURLs);
+                }
+            } else {
+                sendReply(server, room, sender, "No issues found for " + targetOrgText + ".");
+            }
+        }, function(error) {
+            sendReply(server, room, sender, error);
+        });
     }
 },
 { // #### MOTD COMMAND ####
@@ -204,63 +234,118 @@ var chatCommands = [
         }
     }
 },
-{ // #### CONTRIBS COMMAND ####
-    command: 'contribs',
-    help: "The command " + commandChar + "contribs displays all contributors to monitored groups on GitHub.\n" +
-        "\n" + "Usage: " + commandChar + "contribs",
-    exec: function(server, room, sender, message, extras) {
-        var contribUsers = [];
-        var contribList = "";
-        getAllContribs().then(function(contribs) {
-            if (contribs.length > 0) {
-                for (i = 0; i < contribs.length; i++) {
-                    if (contribUsers.indexOf(contribs[i].login) === -1) contribUsers.push(contribs[i].login);
-                }
-                for (i = 0; i < contribUsers.length; i++) {
-                    if (contribList.length > 0) contribList += ", ";
-                    contribList += contribUsers[i];
-                }
-                sendReply(server, room, sender, "Contributing users to all monitored GitHub groups: " + contribList);
-            } else {
-                sendReply(server, room, sender, "No contributors found for monitored GitHub groups.");
-            }
-        });
-    }
-},
 { // #### PRS COMMAND ####
     command: 'prs',
-    help: "The command " + commandChar + "prs displays current pull requests for all monitored groups on GitHub.\n" +
-        "\n" + "Usage: " + commandChar + "prs",
+    help: "The command " + commandChar + "prs displays current pull requests for all monitored GitHub organizations.\n" +
+        "\nUsage: " + commandChar + "prs [filter]" +
+        "\nIf [filter] is specified, displayed pull requests will be filtered. Otherwise, pull requests for all monitored organizations will be displayed.",
     exec: function(server, room, sender, message, extras) {
         var pullURLs = "";
-        getAllPullRequests().then(function(prs) {
+
+        var params = getParams(this.command, message);
+        if (params.length > 0) {
+            var filter = params.split(' ')[0];
+            var targetOrgText = "the GitHub filter '" + filter + "'";
+        } else {
+            var filter = null;
+            var targetOrgText = "all monitored GitHub organizations";
+        }
+
+        getAllPullRequests(filter).then(function(prs) {
             if (prs.length > 0) {
-                prs.forEach(function(pr, index) {
-                    pullURLs += "\n   " + (index + 1) + ": " + pr.html_url;
-                });
-                sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against all monitored GitHub groups:" + pullURLs);
+                if (! filter && prs.length > 5) {
+                    for (var i = 0; i < 5; i++) {
+                        pullURLs += "\n   " + (i + 1) + ": " + prs[i].html_url;
+                    }
+                    sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against " + targetOrgText + ":" + pullURLs +
+                        "\n To display more than the first 5 pull requests, include a filter in your command.");
+                } else {
+                    prs.forEach(function(pr, index) {
+                        pullURLs += "\n   " + (index + 1) + ": " + pr.html_url;
+                    });
+                    sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against " + targetOrgText + ":" + pullURLs);
+                }
             } else {
-                sendReply(server, room, sender, "No pull requests found for monitored GitHub groups.");
+                sendReply(server, room, sender, "No pull requests found for " + targetOrgText + ".");
+            }
+        }, function(error) {
+            sendReply(server, room, sender, error);
+        });
+    }
+},
+{ // #### REPOS COMMAND ####
+    command: 'repos',
+    help: "The command " + commandChar + "repos displays current repositories for monitored GitHub organizations.\n" +
+        "\nUsage: " + commandChar + "repos [organization]\n" +
+        "\nIf [organization] is specified, displayed repositories will be filtered. Otherwise, repositories for all monitored organizations will be displayed.",
+    exec: function(server, room, sender, message, extras) {
+        var repoURLs = "";
+
+        var params = getParams(this.command, message);
+        if (params.length > 0) {
+            var on = params.split(' ')[0].toLowerCase();
+            var onFound = false;
+            for (i = 0; i < config.githubOrgs.length; i++) {
+                if (config.githubOrgs[i].toLowerCase() === on) {
+                    onFound = true;
+                    break;
+                }
+            }
+            if (gnFound) {
+                // first parameter is an organization name
+                params = params.slice(gn.length + 1);
+                var targetOrg = on;
+                var targetOrgText = "the GitHub organization '" + on + "'";
+            } else {
+                return sendReply(server, room, sender, "Not currently monitoring an organization named '" + on + "'.");
+            }
+        } else {
+            var targetOrg = null;
+            var targetOrgText = "all monitored GitHub organizations";
+        }
+
+        getAllRepos(targetOrg).then(function(repos) {
+            if (repos.length > 0) {
+                repos.forEach(function(repo, index) {
+                    repoURLs += "\n   " + (index + 1) + ": " + repo.full_name + " - " + repo.html_url;
+                });
+                sendReply(server, room, sender, "There are currently " + repos.length + " repositories within " + targetOrgText + ":" + repoURLs);
+            } else {
+                sendReply(server, room, sender, "No repositories found for " + targetOrgText + ".");
             }
         });
     }
 },
-{ // #### ISSUES COMMAND ####
-    command: 'issues',
-    help: "The command " + commandChar + "issues displays current issues for all monitored groups on GitHub.\n" +
-        "\n" + "Usage: " + commandChar + "issues",
+{ // #### TIPS COMMAND ####
+    command: 'tips',
+    help: "The command " + commandChar + "tips displays tips for new Mod Squad members.\n" +
+        "\nUsage: " + commandChar + "tips [user]\n" +
+        "\nIf [user] is specified, tips will be sent to that user. If 'chat' is specified as the user, tips will be sent to chat.", 
     exec: function(server, room, sender, message, extras) {
-        var issueURLs = "";
-        getAllIssues().then(function(issues) {
-            if (issues.length > 0) {
-                issues.forEach(function(issue, index) {
-                    issueURLs += "\n   " + (index + 1) + ": " + issue.html_url;
-                });
-                sendReply(server, room, sender, "There are currently " + issues.length + " issues open against all monitored GitHub groups:" + issueURLs);
-            } else {
-                sendReply(server, room, sender, "No issues found for monitored GitHub groups.");
+        var params = getParams(this.command, message);
+        if (params.length > 0) {
+            var pn = params.split(' ')[0].toLowerCase();
+            if (pn !== 'chat') {
+                if (room === 'pm') {
+                    // Only allow tips requested via PM to be sent to requester to avoid abuse
+                    sendReply(server, room, sender, "Tips sent to " + sender.split("@")[0] + ".");
+                } else {
+                    // send message as PM to specified user
+                    sendReply(server, room, sender, "Tips sent to " + pn + ".");
+                    room = 'pm';
+                    sender = pn + '@' + server.address;
+                }
             }
-        })
+        } else {
+            // send message as PM to user calling !tips
+            sendReply(server, room, sender, "Tips sent to " + sender.split("@")[0] + ".");
+            if (room !== 'pm') {
+                room = 'pm';
+                sender = sender + '@' + server.address;               
+            }
+        }
+
+        sendReply(server, room, sender, "Quick Tips: Welcome to the Mod Squad. Tips coming soon(tm)!");
     }
 },
 ];
@@ -316,29 +401,64 @@ function getAllContribs() {
 function getAllEvents() {
     return new Promise(function (fulfill, reject) {
         var allEvents = [];
-        var groupCount = config.githubGroups.length;
-        config.githubGroups.forEach(function(ghUser, index, array) {
+        var orgCount = config.githubOrgs.length;
+        config.githubOrgs.forEach(function(ghUser, index, array) {
             gitAuth();
             github.events.getFromOrg({
                 org: ghUser
             }, function(err, res) {
-                groupCount--;
+                orgCount--;
                 if (! err) {
                     allEvents = allEvents.concat(res);
                 } else {
                     util.log("[ERROR] Error pulling list of events for '" + ghUser + "'.");
                 }
-                if (groupCount === 0) fulfill(allEvents);
+                if (orgCount === 0) fulfill(allEvents);
             });
         });
     });
 }
 
 // function to obtain all issues for every repo owned by all monitored users
-function getAllIssues() {
+function getAllIssues(filter) {
     return new Promise(function (fulfill, reject) {
         var allIssues = [];
-        getAllRepos().then(function(repos) {
+        var orgName = null;
+        var repoName = null;
+
+        if (filter) {
+            if (filter.indexOf('/') > -1) {
+                orgName = filter.split('/')[0];
+                repoName = filter.split('/')[1];
+                var validOrg = false;
+                for (i = 0; i < config.githubOrgs.length; i++) {
+                    if (config.githubOrgs[i].toLowerCase() === orgName.toLowerCase()) validOrg = true;
+                }
+                if (! validOrg) return reject("The organization named '" + orgName + "' is not a monitored GitHub organization.");
+            } else {
+                var validOrg = false;
+                for (i = 0; i < config.githubOrgs.length; i++) {
+                    if (config.githubOrgs[i].toLowerCase() === filter.toLowerCase()) validOrg = true;
+                }
+                if (validOrg) {
+                    orgName = filter;
+                } else {
+                    repoName = filter;
+                }
+            }
+        }
+
+        getAllRepos(orgName).then(function(repos) {
+            if (repoName) {
+                for (i = 0; i < repos.length; i++) {
+                    if (repos[i].name.toLowerCase() !== repoName.toLowerCase()) {
+                        repos.splice(i, 1);
+                        i--;
+                    }
+                }
+                if (repos.length < 1) fulfill(allIssues);
+            }
+
             var repoCount = repos.length;
             repos.forEach(function(repo) {
                 gitAuth();
@@ -361,10 +481,45 @@ function getAllIssues() {
 }
 
 // function to obtain all pull reqeusts for every repo owned by all monitored users
-function getAllPullRequests() {
+function getAllPullRequests(filter) {
     return new Promise(function (fulfill, reject) {
         var allPullRequests = [];
-        getAllRepos().then(function(repos) {
+        var orgName = null;
+        var repoName = null;
+
+        if (filter) {
+            if (filter.indexOf('/') > -1) {
+                orgName = filter.split('/')[0];
+                repoName = filter.split('/')[1];
+                var validOrg = false;
+                for (i = 0; i < config.githubOrgs.length; i++) {
+                    if (config.githubOrgs[i].toLowerCase() === orgName.toLowerCase()) validOrg = true;
+                }
+                if (! validOrg) return reject("The organization named '" + orgName + "' is not a monitored GitHub organization.");
+            } else {
+                var validOrg = false;
+                for (i = 0; i < config.githubOrgs.length; i++) {
+                    if (config.githubOrgs[i].toLowerCase() === filter.toLowerCase()) validOrg = true;
+                }
+                if (validOrg) {
+                    orgName = filter;
+                } else {
+                    repoName = filter;
+                }
+            }
+        }
+
+        getAllRepos(orgName).then(function(repos) {
+            if (repoName) {
+                for (i = 0; i < repos.length; i++) {
+                    if (repos[i].name.toLowerCase() !== repoName.toLowerCase()) {
+                        repos.splice(i, 1);
+                        i--;
+                    }
+                }
+                if (repos.length < 1) fulfill(allPullRequests);
+            }
+
             var repoCount = repos.length;
             repos.forEach(function(repo, index, array) {
                 gitAuth();
@@ -385,23 +540,29 @@ function getAllPullRequests() {
     });
 }
 
-// function to obtain all repos owned by all monitored groups
-function getAllRepos() {
+// function to obtain all repos owned by all monitored organizations
+function getAllRepos(org) {
     return new Promise(function (fulfill, reject) {
         var allRepos = [];
-        var groupCount = config.githubGroups.length;
-        config.githubGroups.forEach(function(ghUser, index, array) {
+        if (org) {
+            var orgsToSearch = [org];
+        } else {
+            var orgsToSearch = config.githubOrgs;
+        }
+        var orgCount = orgsToSearch.length;
+
+        orgsToSearch.forEach(function(ghUser, index, array) {
             gitAuth();
             github.repos.getFromOrg({
                 org: ghUser
             }, function(err, res) {
-                groupCount--;
+                orgCount--;
                 if (! err) {
                     allRepos = allRepos.concat(res);
                 } else {
                     util.log("[ERROR] Error pulling list of repositories for '" + ghUser + "'.");
                 }
-                if (groupCount === 0) fulfill(allRepos);
+                if (orgCount === 0) fulfill(allRepos);
             });
         });
     });    
