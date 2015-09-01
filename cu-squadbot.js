@@ -59,7 +59,7 @@ var chatCommands = [
 { // #### BOTINFO COMMAND ####
     command: 'botinfo',
     help: "The command " + commandChar + "botinfo displays information about this chatbot.\n" +
-        "\n" + "Usage: " + commandChar + "botinfo",
+        "\nUsage: " + commandChar + "botinfo",
     exec: function(server, room, sender, message, extras) {
         sendReply(server, room, sender, "The bot is written in Node.js and is running on an OpenShift gear. Source code for the bot can be found here: https://github.com/CUModSquad/SquadBot" +
             "\n\nMuch thanks to the CU Mod Squad for their help.");
@@ -67,8 +67,8 @@ var chatCommands = [
 },
 { // #### CONTRIBS COMMAND ####
     command: 'contribs',
-    help: "The command " + commandChar + "contribs displays all contributors to monitored groups on GitHub.\n" +
-        "\n" + "Usage: " + commandChar + "contribs",
+    help: "The command " + commandChar + "contribs displays all contributors to monitored organizations on GitHub.\n" +
+        "\nUsage: " + commandChar + "contribs",
     exec: function(server, room, sender, message, extras) {
         var contribUsers = [];
         var contribList = "";
@@ -81,28 +81,49 @@ var chatCommands = [
                     if (contribList.length > 0) contribList += ", ";
                     contribList += contribUsers[i];
                 }
-                sendReply(server, room, sender, "Contributing users to all monitored GitHub groups: " + contribList);
+                sendReply(server, room, sender, "Contributing users to all monitored GitHub organizations: " + contribList);
             } else {
-                sendReply(server, room, sender, "No contributors found for monitored GitHub groups.");
+                sendReply(server, room, sender, "No contributors found for monitored GitHub organizations.");
             }
         });
     }
 },
 { // #### ISSUES COMMAND ####
     command: 'issues',
-    help: "The command " + commandChar + "issues displays current issues for all monitored groups on GitHub.\n" +
-        "\n" + "Usage: " + commandChar + "issues",
+    help: "The command " + commandChar + "issues displays current issues for all monitored organizations on GitHub.\n" +
+        "\nUsage: " + commandChar + "issues [filter]" +
+        "\nIf [filter] is specified, displayed issues will be filtered. Otherwise, issues for all monitored organizations will be displayed.",
     exec: function(server, room, sender, message, extras) {
         var issueURLs = "";
-        getAllIssues().then(function(issues) {
+
+        var params = getParams(this.command, message);
+        if (params.length > 0) {
+            var filter = params.split(' ')[0];
+            var targetOrgText = "the GitHub filter '" + filter + "'";
+        } else {
+            var filter = null;
+            var targetOrgText = "all monitored GitHub organizations";
+        }
+
+        getAllIssues(filter).then(function(issues) {
             if (issues.length > 0) {
-                issues.forEach(function(issue, index) {
-                    issueURLs += "\n   " + (index + 1) + ": " + issue.html_url;
-                });
-                sendReply(server, room, sender, "There are currently " + issues.length + " issues open against all monitored GitHub groups:" + issueURLs);
+                if (! filter && issues.length > 5) {
+                    for (var i = 0; i < 5; i++) {
+                        issueURLs += "\n   " + (i + 1) + ": " + issues[i].html_url;
+                    }
+                    sendReply(server, room, sender, "There are currently " + issues.length + " issues open against " + targetOrgText + ":" + issueURLs +
+                        "\n To display more than the first 5 issues, include a filter in your command.");
+                } else {
+                    issues.forEach(function(issue, index) {
+                        issueURLs += "\n   " + (index + 1) + ": " + issue.html_url;
+                    });
+                    sendReply(server, room, sender, "There are currently " + issues.length + " issues open against " + targetOrgText + ":" + issueURLs);
+                }
             } else {
-                sendReply(server, room, sender, "No issues found for monitored GitHub groups.");
+                sendReply(server, room, sender, "No issues found for " + targetOrgText + ".");
             }
+        }, function(error) {
+            sendReply(server, room, sender, error);
         })
     }
 },
@@ -215,8 +236,8 @@ var chatCommands = [
 },
 { // #### PRS COMMAND ####
     command: 'prs',
-    help: "The command " + commandChar + "prs displays current pull requests for all monitored groups on GitHub.\n" +
-        "\n" + "Usage: " + commandChar + "prs",
+    help: "The command " + commandChar + "prs displays current pull requests for all monitored organizations on GitHub.\n" +
+        "\nUsage: " + commandChar + "prs",
     exec: function(server, room, sender, message, extras) {
         var pullURLs = "";
         getAllPullRequests().then(function(prs) {
@@ -224,51 +245,52 @@ var chatCommands = [
                 prs.forEach(function(pr, index) {
                     pullURLs += "\n   " + (index + 1) + ": " + pr.html_url;
                 });
-                sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against all monitored GitHub groups:" + pullURLs);
+                sendReply(server, room, sender, "There are currently " + prs.length + " pull requests open against all monitored GitHub organizations:" + pullURLs);
             } else {
-                sendReply(server, room, sender, "No pull requests found for monitored GitHub groups.");
+                sendReply(server, room, sender, "No pull requests found for monitored GitHub organizations.");
             }
         });
     }
 },
 { // #### REPOS COMMAND ####
     command: 'repos',
-    help: "The command " + commandChar + "repos displays current repositories for all monitored groups on GitHub.\n" +
-        "\n" + "Usage: " + commandChar + "repos",
+    help: "The command " + commandChar + "repos displays current repositories for monitored organizations on GitHub.\n" +
+        "\nUsage: " + commandChar + "repos [organization]\n" +
+        "\nIf [organization] is specified, displayed repositories will be filtered. Otherwise, repositories for all monitored organizations will be displayed.",
     exec: function(server, room, sender, message, extras) {
         var repoURLs = "";
 
         var params = getParams(this.command, message);
         if (params.length > 0) {
-            var gn = params.split(' ')[0].toLowerCase();
-            var gnFound = false;
-            for (i = 0; i < config.githubGroups.length; i++) {
-                if (config.githubGroups[i].toLowerCase() === gn) {
-                    gnFound = true;
+            var on = params.split(' ')[0].toLowerCase();
+            var onFound = false;
+            for (i = 0; i < config.githubOrgs.length; i++) {
+                if (config.githubOrgs[i].toLowerCase() === on) {
+                    onFound = true;
                     break;
                 }
             }
             if (gnFound) {
-                // first parameter is a group name
+                // first parameter is an organization name
                 params = params.slice(gn.length + 1);
-                var targetGroup = gn;
-                var targetGroupText = "the GitHub group '" + gn + "'";
+                var targetOrg = on;
+                var targetOrgText = "the GitHub organization '" + on + "'";
             } else {
-                return sendReply(server, room, sender, "Not currently monitoring a group named '" + gn + "'.");
+                return sendReply(server, room, sender, "Not currently monitoring an organization named '" + on + "'.");
             }
         } else {
-            var targetGroup = null;
-            var targetGroupText = "all monitored GitHub groups";
+            var targetOrg = null;
+            var targetOrgText = "all monitored GitHub organizations";
         }
 
-        getAllRepos(targetGroup).then(function(repos) {
+        getAllRepos(targetOrg).then(function(repos) {
             if (repos.length > 0) {
                 repos.forEach(function(repo, index) {
                     repoURLs += "\n   " + (index + 1) + ": " + repo.full_name + " - " + repo.html_url;
                 });
-                sendReply(server, room, sender, "There are currently " + repos.length + " repositories within " + targetGroupText + ":" + repoURLs);
+                sendReply(server, room, sender, "There are currently " + repos.length + " repositories within " + targetOrgText + ":" + repoURLs);
             } else {
-                sendReply(server, room, sender, "No repositories found for " + targetGroupText + ".");
+                sendReply(server, room, sender, "No repositories found for " + targetOrgText + ".");
             }
         });
     }
@@ -276,7 +298,7 @@ var chatCommands = [
 { // #### TIPS COMMAND ####
     command: 'tips',
     help: "The command " + commandChar + "tips displays tips for new Mod Squad members.\n" +
-        "\n" + "Usage: " + commandChar + "tips [user]\n" +
+        "\nUsage: " + commandChar + "tips [user]\n" +
         "\nIf [user] is specified, tips will be sent to that user. If 'chat' is specified as the user, tips will be sent to chat.", 
     exec: function(server, room, sender, message, extras) {
         var params = getParams(this.command, message);
@@ -358,29 +380,64 @@ function getAllContribs() {
 function getAllEvents() {
     return new Promise(function (fulfill, reject) {
         var allEvents = [];
-        var groupCount = config.githubGroups.length;
-        config.githubGroups.forEach(function(ghUser, index, array) {
+        var orgCount = config.githubOrgs.length;
+        config.githubOrgs.forEach(function(ghUser, index, array) {
             gitAuth();
             github.events.getFromOrg({
                 org: ghUser
             }, function(err, res) {
-                groupCount--;
+                orgCount--;
                 if (! err) {
                     allEvents = allEvents.concat(res);
                 } else {
                     util.log("[ERROR] Error pulling list of events for '" + ghUser + "'.");
                 }
-                if (groupCount === 0) fulfill(allEvents);
+                if (orgCount === 0) fulfill(allEvents);
             });
         });
     });
 }
 
 // function to obtain all issues for every repo owned by all monitored users
-function getAllIssues() {
+function getAllIssues(filter) {
     return new Promise(function (fulfill, reject) {
         var allIssues = [];
-        getAllRepos().then(function(repos) {
+        var orgName = null;
+        var repoName = null;
+
+        if (filter) {
+            if (filter.indexOf('/') > -1) {
+                orgName = filter.split('/')[0];
+                repoName = filter.split('/')[1];
+                var validOrg = false;
+                for (i = 0; i < config.githubOrgs.length; i++) {
+                    if (config.githubOrgs[i].toLowerCase() === orgName.toLowerCase()) validOrg = true;
+                }
+                if (! validOrg) return reject("The organization named '" + orgName + "' is not a monitored GitHub organization.");
+            } else {
+                var validOrg = false;
+                for (i = 0; i < config.githubOrgs.length; i++) {
+                    if (config.githubOrgs[i].toLowerCase() === filter.toLowerCase()) validOrg = true;
+                }
+                if (validOrg) {
+                    orgName = filter;
+                } else {
+                    repoName = filter;
+                }
+            }
+        }
+
+        getAllRepos(orgName).then(function(repos) {
+            if (repoName) {
+                for (i = 0; i < repos.length; i++) {
+                    if (repos[i].name.toLowerCase() !== repoName.toLowerCase()) {
+                        repos.splice(i, 1);
+                        i--;
+                    }
+                }
+                if (repos.length < 1) fulfill(allIssues);
+            }
+
             var repoCount = repos.length;
             repos.forEach(function(repo) {
                 gitAuth();
@@ -427,29 +484,29 @@ function getAllPullRequests() {
     });
 }
 
-// function to obtain all repos owned by all monitored groups
-function getAllRepos(group) {
+// function to obtain all repos owned by all monitored organizations
+function getAllRepos(org) {
     return new Promise(function (fulfill, reject) {
         var allRepos = [];
-        if (group) {
-            var groupsToSearch = [group];
+        if (org) {
+            var orgsToSearch = [org];
         } else {
-            var groupsToSearch = config.githubGroups;
+            var orgsToSearch = config.githubOrgs;
         }
-        var groupCount = groupsToSearch.length;
+        var orgCount = orgsToSearch.length;
 
-        groupsToSearch.forEach(function(ghUser, index, array) {
+        orgsToSearch.forEach(function(ghUser, index, array) {
             gitAuth();
             github.repos.getFromOrg({
                 org: ghUser
             }, function(err, res) {
-                groupCount--;
+                orgCount--;
                 if (! err) {
                     allRepos = allRepos.concat(res);
                 } else {
                     util.log("[ERROR] Error pulling list of repositories for '" + ghUser + "'.");
                 }
-                if (groupCount === 0) fulfill(allRepos);
+                if (orgCount === 0) fulfill(allRepos);
             });
         });
     });    
