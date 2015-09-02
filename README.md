@@ -3,6 +3,7 @@ An XMPP Chat bot for Mod Squad
 
 ### Implemented Commands:
 
+ * **!chatlog <hours>** - This sends a private message containing all chat logs from the conference room. The <hours> parameter must be supplied to specify the age of the messages to be included.
  * **!contribs** - This shows all contributors to any of the monitored GitHub groups. 
  * **!issues [filter]** - This shows all open issues for any of the repos owned by the monitored GitHub organizations. If the [filter] parameter is supplied, results will be filtered. The filter format can be 'organization', 'repo', or 'organization/repo'.
  * **!motd** - This can show a Mod Squad MOTD.
