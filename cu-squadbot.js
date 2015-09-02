@@ -3,11 +3,11 @@
 To use, run `node cu-squadbot.js`
 
 Requires:
- - Node.js 11.x
- - node-xmpp
- - request
+ - Node.js
  - github
  - moment
+ - node-xmpp
+ - request
  - bluebird*
  - Camelot Unchained account
 
@@ -15,8 +15,8 @@ Requires:
 which don't have Promise support.
 
 Optional:
- - node-pushover - Needed to send Pushover notifications.
  - aws-sdk - Needed to send push notifications (SMS/email/etc.) via AWS SNS.
+ - node-pushover - Needed to send Pushover notifications.
 
 */
 
@@ -24,10 +24,11 @@ var sys = require('sys');
 var util = require('util');
 var path = require('path');
 var fs = require('fs');
-var request = require('request');
-var xmpp = require('node-xmpp');
-var GitHubApi = require('github');
+
+var githubAPI = require('github');
 var moment = require('moment');
+var xmpp = require('node-xmpp');
+var request = require('request');
 
 var cuRestAPI = require('./cu-rest.js');
 var config = require('./cu-squadbot.cfg');
@@ -65,6 +66,49 @@ var chatCommands = [
             "\n\nMuch thanks to the CU Mod Squad for their help.");
     }
 },
+{ // #### CHATLOG COMMAND ####
+    command: 'chatlog',
+    help: "The command " + commandChar + "chatlog sends a private message with logged chat messages from the current room.\n" +
+        "\nUsage: " + commandChar + "chatlog <hours>\n" +
+        "\nAll chat messages recorded in the time specified via <hours> will be sent as a private message. Currently, chat messages will be logged for a maximum of " + config.chatlogLimit + " hours.",
+    exec: function(server, room, sender, message, extras) {
+        var curISODate = new Date().toISOString();
+        var params = getParams(this.command, message);
+        if (params.length > 0) {
+            var searchHours = params.split(' ')[0];
+            if (searchHours % 1 !== 0 || searchHours < 1) {
+                sendReply(server, room, sender, "You have specified an invalid 'hours' value. Type `" + commandChar + "help chatlog` for more information.");
+                return;                
+            }
+        } else {
+            sendReply(server, room, sender, "You must specify how many hours of logs should be sent. Type `" + commandChar + "help chatlog` for more information.");
+            return;
+        }
+
+
+        if (room === 'pm') {
+            sendReply(server, room, sender, "This command currently does not work via private messages.");
+            return;
+        } else {
+            var roomName = room.split('@')[0];
+            room = 'pm';
+            sender = sender + '@' + server.address;
+        }
+
+        if (! server.chatlog[roomName]) {
+            sendReply(server, room, sender, "No logs are currently saved for the room '" + roomName + "'.");
+            return;
+        }
+
+        var logResults = "Chat history from the last " + searchHours + " hour(s) for the room '" + roomName + "':";
+        for (var i = 0; i < server.chatlog[roomName].length; i++) {
+            if (moment(curISODate).diff(server.chatlog[roomName][i].timestamp, "hours") < searchHours) {
+                logResults += "\n   [" + moment(server.chatlog[roomName][i].timestamp).format("HH:mm") + "] <" + server.chatlog[roomName][i].sender + "> " + server.chatlog[roomName][i].message;
+            }            
+        }
+        sendReply(server, room, sender, logResults);
+    }
+},
 { // #### CONTRIBS COMMAND ####
     command: 'contribs',
     help: "The command " + commandChar + "contribs displays all contributors to monitored GitHub organizations.\n" +
@@ -74,10 +118,10 @@ var chatCommands = [
         var contribList = "";
         getAllContribs().then(function(contribs) {
             if (contribs.length > 0) {
-                for (i = 0; i < contribs.length; i++) {
+                for (var i = 0; i < contribs.length; i++) {
                     if (contribUsers.indexOf(contribs[i].login) === -1) contribUsers.push(contribs[i].login);
                 }
-                for (i = 0; i < contribUsers.length; i++) {
+                for (var i = 0; i < contribUsers.length; i++) {
                     if (contribList.length > 0) contribList += ", ";
                     contribList += contribUsers[i];
                 }
@@ -285,7 +329,7 @@ var chatCommands = [
         if (params.length > 0) {
             var on = params.split(' ')[0].toLowerCase();
             var onFound = false;
-            for (i = 0; i < config.githubOrgs.length; i++) {
+            for (var i = 0; i < config.githubOrgs.length; i++) {
                 if (config.githubOrgs[i].toLowerCase() === on) {
                     onFound = true;
                     break;
@@ -431,13 +475,13 @@ function getAllIssues(filter) {
                 orgName = filter.split('/')[0];
                 repoName = filter.split('/')[1];
                 var validOrg = false;
-                for (i = 0; i < config.githubOrgs.length; i++) {
+                for (var i = 0; i < config.githubOrgs.length; i++) {
                     if (config.githubOrgs[i].toLowerCase() === orgName.toLowerCase()) validOrg = true;
                 }
                 if (! validOrg) return reject("The organization named '" + orgName + "' is not a monitored GitHub organization.");
             } else {
                 var validOrg = false;
-                for (i = 0; i < config.githubOrgs.length; i++) {
+                for (var i = 0; i < config.githubOrgs.length; i++) {
                     if (config.githubOrgs[i].toLowerCase() === filter.toLowerCase()) validOrg = true;
                 }
                 if (validOrg) {
@@ -450,7 +494,7 @@ function getAllIssues(filter) {
 
         getAllRepos(orgName).then(function(repos) {
             if (repoName) {
-                for (i = 0; i < repos.length; i++) {
+                for (var i = 0; i < repos.length; i++) {
                     if (repos[i].name.toLowerCase() !== repoName.toLowerCase()) {
                         repos.splice(i, 1);
                         i--;
@@ -492,13 +536,13 @@ function getAllPullRequests(filter) {
                 orgName = filter.split('/')[0];
                 repoName = filter.split('/')[1];
                 var validOrg = false;
-                for (i = 0; i < config.githubOrgs.length; i++) {
+                for (var i = 0; i < config.githubOrgs.length; i++) {
                     if (config.githubOrgs[i].toLowerCase() === orgName.toLowerCase()) validOrg = true;
                 }
                 if (! validOrg) return reject("The organization named '" + orgName + "' is not a monitored GitHub organization.");
             } else {
                 var validOrg = false;
-                for (i = 0; i < config.githubOrgs.length; i++) {
+                for (var i = 0; i < config.githubOrgs.length; i++) {
                     if (config.githubOrgs[i].toLowerCase() === filter.toLowerCase()) validOrg = true;
                 }
                 if (validOrg) {
@@ -511,7 +555,7 @@ function getAllPullRequests(filter) {
 
         getAllRepos(orgName).then(function(repos) {
             if (repoName) {
-                for (i = 0; i < repos.length; i++) {
+                for (var i = 0; i < repos.length; i++) {
                     if (repos[i].name.toLowerCase() !== repoName.toLowerCase()) {
                         repos.splice(i, 1);
                         i--;
@@ -566,6 +610,23 @@ function getAllRepos(org) {
             });
         });
     });    
+}
+
+// function to read in the saved chatlog
+function getChatlog(server) {
+    fs.readFile(server.chatlogFile, function(err, data) {
+        if (err && err.code === 'ENOENT') {
+            server.chatlog = {};
+            fs.writeFile(server.chatlogFile, JSON.stringify(server.chatlog), function(err) {
+                if (err) {
+                    return util.log("[ERROR] Unable to create chatlog file.");
+                }
+                util.log("[STATUS] Chatlog file did not exist. Empty file created.");
+            });
+        } else {
+            server.chatlog = JSON.parse(data);
+        }
+    });
 }
 
 // function to read in the MOTD file
@@ -824,6 +885,29 @@ function sendToIT(message) {
     });
 }
 
+// function to add message to chat log and expire old messages
+function updateChatlog(server, room, message) {
+    var curISODate = new Date().toISOString();
+    server.chatlog[room].push(message);
+
+    // Remove expired messages
+    for (var roomName in server.chatlog) {
+        for (var i = 0; i < server.chatlog[roomName].length; i++) {
+            if (moment(curISODate).diff(server.chatlog[roomName][i].timestamp, "hours") > config.chatlogLimit) {
+                server.chatlog[roomName].splice(i, 1);
+                i--;
+            }            
+        }
+    }
+
+    fs.writeFile(server.chatlogFile, JSON.stringify(server.chatlog), function(err) {
+        if (err) {
+            util.log("[ERROR] Unable to write chatlog file (" + server.name + ").");
+        }
+    });
+}
+
+
 // Timer to verify client is still connected
 var timerConnected = function(server) { return setInterval(function() { checkLastStanza(server); }, 1000); };
 function checkLastStanza(server) {
@@ -846,7 +930,7 @@ function checkGitHub(server) {
 
     // Poll for all events
     getAllEvents().then(function(events) {
-        for (i = 0; i < events.length; i++) {
+        for (var i = 0; i < events.length; i++) {
             var event = events[i];
 
             // Handle Issue Events
@@ -1027,6 +1111,11 @@ function startClient(server) {
                         c('x', { xmlns: 'http://jabber.org/protocol/muc' })
                     );
                     util.log("[STATUS] Client joined '" + room.name + "' on " + server.name + ".");
+
+                    // Chatlog initialization
+                    if (room.log) {
+                        if (! server.chatlog[room.name]) server.chatlog[room.name] = [];
+                    }
                 });
 
                 // Start sending MOTDs
@@ -1102,6 +1191,7 @@ function startClient(server) {
                         return;
                     }
 
+                    var curISODate = new Date().toISOString();
                     var message = body.getText();
                     var sender = stanza.attrs.from.split('/')[1];
                     var senderName = sender.split('@')[0];
@@ -1111,10 +1201,21 @@ function startClient(server) {
                         var cse = stanza.getChild('cseflags').attrs.cse;
                     }
                     var roomIsMonitored = server.rooms[indexOfRoom(server, roomName)].monitor;
+                    var roomIsLogged = server.rooms[indexOfRoom(server, roomName)].log;
 
                     if (cse === "cse" || isMOTDAdmin(senderName)) {
                         motdadmin = true;
                     } else motdadmin = false;
+
+                    // Store message for logged rooms and clean up existing logs
+                    if (roomIsLogged) {
+                        var newLogMsg = {
+                            timestamp: curISODate,
+                            sender: senderName,
+                            message: message
+                        }
+                        updateChatlog(server, roomName, newLogMsg);
+                    }
 
                     // If message matches a defined command, run it
                     if (message[0] === commandChar) {
@@ -1195,7 +1296,7 @@ function restartClient(server) {
 // Initial GitHub startup
 var githubData = {};
 getGitHubData();
-var github = new GitHubApi({
+var github = new githubAPI({
     version: "3.0.0",
     debug: false,
     protocol: "https",
@@ -1213,6 +1314,7 @@ config.servers.forEach(function(server) {
     server.cuRest = new cuRestAPI(server.name);
 
     // Server initialization
+    getChatlog(server);
     getMOTD(server);
     getMOTDIgnore(server);
     server.motdReceivers = [];
