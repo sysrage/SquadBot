@@ -68,29 +68,118 @@ var chatCommands = [
 },
 { // #### CHATLOG COMMAND ####
     command: 'chatlog',
-    help: "The command " + commandChar + "chatlog sends a private message with logged chat messages from the current room.\n" +
-        "\nUsage: " + commandChar + "chatlog <hours>\n" +
-        "\nAll chat messages recorded in the time specified via <hours> will be sent as a private message. Currently, chat messages will be logged for a maximum of " + config.chatlogLimit + " hours.",
+    help: "The command " + commandChar + "chatlog sends a private message with logged chat messages from a monitored room.\n" +
+        "\nUsage: " + commandChar + "chatlog <parameters>\n" +
+        "\nAvailable Parameters:" +
+        "\n  -h <number> = Specify the number of hours to include in displayed results (maximum of " + config.chatlogLimit + ")" +
+        "\n  -m <number> = Specify the number of minutes to include in displayed results (maximum of " + (config.chatlogLimit * 60) + ")" +
+        "\n  -r <room> = Specify the chat room to include in displayed results" +
+        "\n  -u <user> = Specify the user name to include in displayed results" +
+        "\n  -t <text> = Specify the message text to include in displayed results (regular expressions allowed)",
     exec: function(server, room, sender, message, extras) {
         var curISODate = new Date().toISOString();
+        var searchRoom = null;
+        var searchHours = null;
+        var searchMins = null;
+        var searchUser = null;
+        var searchText = null;
+
+        // Parse parameters passed to command
         var params = getParams(this.command, message);
         if (params.length > 0) {
-            var searchHours = params.split(' ')[0];
-            if (searchHours % 1 !== 0 || searchHours < 1) {
-                sendReply(server, room, sender, "You have specified an invalid 'hours' value. Type `" + commandChar + "help chatlog` for more information.");
-                return;                
+            var paramArray = params.split(' ');
+            for (var i = 0; i < paramArray.length; i++) {
+                switch(paramArray[i]) {
+                    case '-r':
+                        // verify next param is a monitored room then set room to search
+                        var validRoom = false;
+                        server.rooms.forEach(function(room){
+                            if (room.name === paramArray[i + 1]) validRoom = true;
+                        });
+                        if (validRoom) {
+                            searchRoom = paramArray[i + 1];
+                            i++;
+                        } else {
+                            sendReply(server, room, sender, "The room '" + paramArray[i + 1] + "' is not being logged.");
+                            return;
+                        }
+                        break;
+                    case '-h':
+                        // verify next param is a positive integer then set hours to search
+                        if (paramArray[i + 1] % 1 !== 0 || paramArray[i + 1] < 1) {
+                            sendReply(server, room, sender, "The value following '-h' must be a positive number.");
+                            return;
+                        }
+                        searchHours = parseInt(paramArray[i + 1]);
+                        i++;
+                        break;
+                    case '-m':
+                        // verify next param is a positive integer then set mins to search
+                        if (paramArray[i + 1] % 1 !== 0 || paramArray[i + 1] < 1) {
+                            sendReply(server, room, sender, "The value following '-m' must be a positive number.");
+                            return;
+                        }
+                        searchMins = parseInt(paramArray[i + 1]);
+                        i++;
+                        break;
+                    case '-u':
+                        // verify next param is a word then set user to search
+                        if (paramArray[i + 1].search(/^[^\-]+/) === -1) {
+                            sendReply(server, room, sender, "The value following '-u' must be a user name.");
+                            return;
+                        }
+                        searchUser = paramArray[i + 1];
+                        i++;
+                        break;
+                    case '-t':
+                        // verify next param exists, then combine all params up to next - or end
+                        if (paramArray[i + 1].search(/^[^\-]+/) === -1) {
+                            sendReply(server, room, sender, "The value following '-t' must be text to search for.");
+                            return;
+                        }
+                        var sTxt = "";
+                        for (var t = i + 1; t < paramArray.length; t++) {
+                            if (paramArray[t].search(/^[^\-]+/) !== -1) {
+                                if (sTxt.length > 0) sTxt += " ";
+                                sTxt += paramArray[t];
+                            } else {
+                                break;
+                            }
+                        }
+                        searchText = sTxt;
+                        break;
+                    default:
+                        // Allow ##h and ##m for hours and minutes
+                        if (paramArray[i].search(/[0-9]+[Hh]/) !== -1) searchHours = parseInt(paramArray[i]);
+                        if (paramArray[i].search(/[0-9]+[Mm]/) !== -1) searchMins = parseInt(paramArray[i]);
+                        break;
+                }
             }
         } else {
-            sendReply(server, room, sender, "You must specify how many hours of logs should be sent. Type `" + commandChar + "help chatlog` for more information.");
+            sendReply(server, room, sender, "Please specify a filter to limit the number of messages displayed. Type `" + commandChar + "help chatlog` for more information.");
             return;
         }
 
+        if (! searchHours && ! searchMins) searchHours = config.chatlogLimit;
+
+        if (searchHours && searchMins) {
+            searchMins += searchHours * 60;
+            searchHours = null;
+        }
 
         if (room === 'pm') {
-            sendReply(server, room, sender, "This command currently does not work via private messages.");
-            return;
+            if (searchRoom) {
+                var roomName = searchRoom;
+            } else {
+                sendReply(server, room, sender, "You must specify a room to search with the '-r' parameter.");
+                return;
+            }
         } else {
-            var roomName = room.split('@')[0];
+            if (searchRoom) {
+                var roomName = searchRoom;
+            } else {
+                var roomName = room.split('@')[0];
+            }
             room = 'pm';
             sender = sender + '@' + server.address;
         }
@@ -100,12 +189,29 @@ var chatCommands = [
             return;
         }
 
-        var logResults = "Chat history from the last " + searchHours + " hour(s) for the room '" + roomName + "':";
+        var logResults = "Chat history with filter '";
+        if (searchHours) logResults += "hours:" + searchHours + " ";
+        if (searchMins) logResults += "mins:" + searchMins + " ";
+        if (searchUser) logResults += "user:" + searchUser + " ";
+        if (searchText) logResults += "text:" + searchText + " ";
+        logResults += "room: " + roomName + "':";
+
+        var matchingChat = [];
         for (var i = 0; i < server.chatlog[roomName].length; i++) {
-            if (moment(curISODate).diff(server.chatlog[roomName][i].timestamp, "hours") < searchHours) {
-                logResults += "\n   [" + moment(server.chatlog[roomName][i].timestamp).format("HH:mm") + "] <" + server.chatlog[roomName][i].sender + "> " + server.chatlog[roomName][i].message;
-            }            
+            if (searchHours) {
+                if (moment(curISODate).diff(server.chatlog[roomName][i].timestamp, "hours") < searchHours) matchingChat.push(server.chatlog[roomName][i]);
+            }
+            if (searchMins) {
+                if (moment(curISODate).diff(server.chatlog[roomName][i].timestamp, "minutes") < searchMins) matchingChat.push(server.chatlog[roomName][i]);
+            }
         }
+        matchingChat.forEach(function(msg) {
+            var isMatch = true;
+            if (searchUser && msg.sender !== searchUser) isMatch = false;
+            if (searchText && msg.message.search(new RegExp(searchText)) === -1) isMatch = false;
+
+            if (isMatch) logResults += "\n   [" + moment(msg.timestamp).format("HH:mm") + "] <" + msg.sender + "> " + msg.message;
+        });
         sendReply(server, room, sender, logResults);
     }
 },
