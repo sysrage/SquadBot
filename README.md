@@ -33,7 +33,7 @@ An XMPP Chat bot for Mod Squad
 !repos [org]          - This shows all repositories for the monitored GitHub organizations. If the [org]
                         parameter is supplied, only repositories for that organization will be shown.
 
- !tips                - This can show tips related to Mod Squad activities.
+!tips                - This can show tips related to Mod Squad activities.
 ```
 
 ### Current Features:
