@@ -71,8 +71,8 @@ var chatCommands = [
     help: "The command " + commandChar + "chatlog sends a private message with logged chat messages from a monitored room.\n" +
         "\nUsage: " + commandChar + "chatlog <parameters>\n" +
         "\nAvailable Parameters:" +
-        "\n  -h <number> = Specify the number of hours to include in displayed results (maximum of " + config.chatlogLimit + ")" +
-        "\n  -m <number> = Specify the number of minutes to include in displayed results (maximum of " + (config.chatlogLimit * 60) + ")" +
+        "\n  -h <number> = Specify the number of hours to include in displayed results (maximum of " + config.chatlogLimit + " hours)" +
+        "\n  -m <number> = Specify the number of minutes to include in displayed results (maximum of " + (config.chatlogLimit * 60) + " minutes)" +
         "\n  -r <room> = Specify the chat room to include in displayed results" +
         "\n  -u <user> = Specify the user name to include in displayed results" +
         "\n  -t <text> = Specify the message text to include in displayed results (regular expressions allowed)",
@@ -159,6 +159,7 @@ var chatCommands = [
                         // Allow ##h and ##m for hours and minutes
                         if (paramArray[i].search(/[0-9]+[Hh]/) !== -1) searchHours = parseInt(paramArray[i]);
                         if (paramArray[i].search(/[0-9]+[Mm]/) !== -1) searchMins = parseInt(paramArray[i]);
+                        if (paramArray[i].search(/[0-9]+/) !== -1) searchHours = parseInt(paramArray[i]);
                         break;
                 }
             }
