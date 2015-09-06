@@ -167,6 +167,11 @@ var chatCommands = [
             return;
         }
 
+        if (! searchHours && ! searchMins && ! searchRoom && ! searchUser && ! searchText) {
+            sendReply(server, room, sender, "Invalid parameters supplied to command. Type `" + commandChar + "help chatlog` for more information.");
+            return;            
+        }
+
         if (! searchHours && ! searchMins) searchHours = config.chatlogLimit;
 
         if (searchHours && searchMins) {
