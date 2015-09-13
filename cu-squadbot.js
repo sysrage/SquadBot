@@ -1052,6 +1052,13 @@ function checkGitHub(server) {
     for (var i = 0; i < events.length; i++) {
       var event = events[i];
 
+      // Skip event if the user is ignored
+      var ignoredEvent = false;
+      config.githubIgnores.forEach(function(igUser) {
+        if (igUser === event.actor.login) ignoredEvent = true;
+      });
+      if (ignoredEvent) return;
+
       // Handle Issue Events
       if (event.type === 'IssuesEvent') {
         var diff = moment(event.payload.issue.updated_at).diff(githubData.lastIssue);
