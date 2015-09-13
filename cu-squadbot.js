@@ -1057,74 +1057,9 @@ function checkGitHub(server) {
       config.githubIgnores.forEach(function(igUser) {
         if (igUser === event.actor.login) ignoredEvent = true;
       });
-      if (ignoredEvent) return;
-
-      // Handle Issue Events
-      if (event.type === 'IssuesEvent') {
-        var diff = moment(event.payload.issue.updated_at).diff(githubData.lastIssue);
-        if (diff > 0) {
-          // Save new issue date
-          if (moment(event.payload.issue.updated_at).diff(tempLastIssue) > 0) tempLastIssue = event.payload.issue.updated_at;
-          newIssueData = true;
-
-          // Announce new information to chat room
-          if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
-            var chatMessage = "An existing issue for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
-            "\n" + event.payload.issue.html_url;
-          } else {
-            var chatMessage = "A new issue for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
-            "\n" + event.payload.issue.html_url;
-          }
-          server.rooms.forEach(function(room) {
-            if (room.announce && githubData.lastIssue !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
-          });
-        }
-      }
-
-      if (event.type === 'PullRequestEvent') {
-        var diff = moment(event.payload.pull_request.updated_at).diff(githubData.lastPR);
-        if (diff > 0) {
-          // Save new PR date
-          if (moment(event.payload.pull_request.updated_at).diff(tempLastPR) > 0) tempLastPR = event.payload.pull_request.updated_at;
-          newPRData = true;
-
-          // Announce new information to chat room
-          if (event.payload.pull_request.created_at !== event.payload.pull_request.updated_at) {
-            var chatMessage = "An existing pull request for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
-            "\n" + event.payload.pull_request.html_url;
-          } else {
-            var chatMessage = "A new pull request for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
-            "\n" + event.payload.pull_request.html_url;
-          }
-          server.rooms.forEach(function(room) {
-            if (room.announce && githubData.lastPR !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
-          });
-        }
-      }
-
-      if (event.type === 'IssueCommentEvent') {
-        if (event.payload.issue.pull_request) {
-          // Comment is for a pull request
-          var diff = moment(event.payload.issue.updated_at).diff(githubData.lastPR);
-          if (diff > 0) {
-            // Save new PR date
-            if (moment(event.payload.issue.updated_at).diff(tempLastPR) > 0) tempLastPR = event.payload.issue.updated_at;
-            newPRData = true;
-
-            // Announce new information to chat room
-            if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
-              var chatMessage = "An existing pull request for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
-              "\n" + event.payload.issue.html_url;
-            } else {
-              var chatMessage = "A new pull request for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
-              "\n" + event.payload.issue.html_url;
-            }
-            server.rooms.forEach(function(room) {
-              if (room.announce && githubData.lastPR !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
-            });
-          }
-        } else {
-          // Comment is for an issue
+      if (! ignoredEvent) {
+        // Handle Issue Events
+        if (event.type === 'IssuesEvent') {
           var diff = moment(event.payload.issue.updated_at).diff(githubData.lastIssue);
           if (diff > 0) {
             // Save new issue date
@@ -1142,6 +1077,71 @@ function checkGitHub(server) {
             server.rooms.forEach(function(room) {
               if (room.announce && githubData.lastIssue !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
             });
+          }
+        }
+
+        if (event.type === 'PullRequestEvent') {
+          var diff = moment(event.payload.pull_request.updated_at).diff(githubData.lastPR);
+          if (diff > 0) {
+            // Save new PR date
+            if (moment(event.payload.pull_request.updated_at).diff(tempLastPR) > 0) tempLastPR = event.payload.pull_request.updated_at;
+            newPRData = true;
+
+            // Announce new information to chat room
+            if (event.payload.pull_request.created_at !== event.payload.pull_request.updated_at) {
+              var chatMessage = "An existing pull request for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+              "\n" + event.payload.pull_request.html_url;
+            } else {
+              var chatMessage = "A new pull request for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
+              "\n" + event.payload.pull_request.html_url;
+            }
+            server.rooms.forEach(function(room) {
+              if (room.announce && githubData.lastPR !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+            });
+          }
+        }
+
+        if (event.type === 'IssueCommentEvent') {
+          if (event.payload.issue.pull_request) {
+            // Comment is for a pull request
+            var diff = moment(event.payload.issue.updated_at).diff(githubData.lastPR);
+            if (diff > 0) {
+              // Save new PR date
+              if (moment(event.payload.issue.updated_at).diff(tempLastPR) > 0) tempLastPR = event.payload.issue.updated_at;
+              newPRData = true;
+
+              // Announce new information to chat room
+              if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
+                var chatMessage = "An existing pull request for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                "\n" + event.payload.issue.html_url;
+              } else {
+                var chatMessage = "A new pull request for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
+                "\n" + event.payload.issue.html_url;
+              }
+              server.rooms.forEach(function(room) {
+                if (room.announce && githubData.lastPR !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+              });
+            }
+          } else {
+            // Comment is for an issue
+            var diff = moment(event.payload.issue.updated_at).diff(githubData.lastIssue);
+            if (diff > 0) {
+              // Save new issue date
+              if (moment(event.payload.issue.updated_at).diff(tempLastIssue) > 0) tempLastIssue = event.payload.issue.updated_at;
+              newIssueData = true;
+
+              // Announce new information to chat room
+              if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
+                var chatMessage = "An existing issue for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                "\n" + event.payload.issue.html_url;
+              } else {
+                var chatMessage = "A new issue for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
+                "\n" + event.payload.issue.html_url;
+              }
+              server.rooms.forEach(function(room) {
+                if (room.announce && githubData.lastIssue !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+              });
+            }
           }
         }
       }
