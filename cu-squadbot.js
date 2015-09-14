@@ -1068,8 +1068,13 @@ function checkGitHub(server) {
 
             // Announce new information to chat room
             if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
-              var chatMessage = "An existing issue for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
-              "\n" + event.payload.issue.html_url;
+              if (event.payload.action === 'closed') {
+                var chatMessage = "An existing issue for '" + event.repo.name + "' has been closed by " + event.actor.login + ":" +
+                "\n" + event.payload.issue.html_url;
+              } else {
+                var chatMessage = "An existing issue for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                "\n" + event.payload.issue.html_url;
+              }
             } else {
               var chatMessage = "A new issue for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
               "\n" + event.payload.issue.html_url;
@@ -1089,8 +1094,13 @@ function checkGitHub(server) {
 
             // Announce new information to chat room
             if (event.payload.pull_request.created_at !== event.payload.pull_request.updated_at) {
-              var chatMessage = "An existing pull request for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
-              "\n" + event.payload.pull_request.html_url;
+              if (event.payload.action === 'closed') {
+                var chatMessage = "An existing pull request for '" + event.repo.name + "' has been closed by " + event.actor.login + ":" +
+                "\n" + event.payload.pull_request.html_url;
+              } else {
+                var chatMessage = "An existing pull request for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                "\n" + event.payload.pull_request.html_url;
+              }
             } else {
               var chatMessage = "A new pull request for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
               "\n" + event.payload.pull_request.html_url;
@@ -1112,10 +1122,10 @@ function checkGitHub(server) {
 
               // Announce new information to chat room
               if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
-                var chatMessage = "An existing pull request for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                var chatMessage = "An existing pull request for '" + event.repo.name + "' has been commented on by " + event.actor.login + ":" +
                 "\n" + event.payload.issue.html_url;
               } else {
-                var chatMessage = "A new pull request for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
+                var chatMessage = "A new pull request for '" + event.repo.name + "' has been commented on by " + event.actor.login + ":" +
                 "\n" + event.payload.issue.html_url;
               }
               server.rooms.forEach(function(room) {
@@ -1132,10 +1142,10 @@ function checkGitHub(server) {
 
               // Announce new information to chat room
               if (event.payload.issue.created_at !== event.payload.issue.updated_at) {
-                var chatMessage = "An existing issue for '" + event.repo.name + "' has been updated by " + event.actor.login + ":" +
+                var chatMessage = "An existing issue for '" + event.repo.name + "' has been commented on by " + event.actor.login + ":" +
                 "\n" + event.payload.issue.html_url;
               } else {
-                var chatMessage = "A new issue for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
+                var chatMessage = "A new issue for '" + event.repo.name + "' has been commented on by " + event.actor.login + ":" +
                 "\n" + event.payload.issue.html_url;
               }
               server.rooms.forEach(function(room) {
