@@ -1049,6 +1049,7 @@ function checkGitHub(server) {
 
   // Poll for all events
   getAllEvents().then(function(events) {
+    events.reverse();
     for (var i = 0; i < events.length; i++) {
       var event = events[i];
 
