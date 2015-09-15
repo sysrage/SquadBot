@@ -989,6 +989,8 @@ function getGitHubUser(user) {
   return new Promise(function (fulfill, reject) {
     if (! user) {
       reject('No username specified.');
+    } else if (user === 'none') {
+      fulfill({});
     } else {
       gitAuth();
       github.user.getFrom({
@@ -1010,15 +1012,18 @@ function getTrelloUser(user) {
   return new Promise(function (fulfill, reject) {
     if (! user) {
       reject('No username specified.');
+    } else if (user === 'none') {
+      fulfill({fullName: 'None'});
+    } else {
+      trello.get("/1/members/" + user, function(err, data) {
+        if (! err) {
+          fulfill(data);
+        } else {
+          util.log("[ERROR] Unable to get user information from Trello API.");
+          reject("The name '" + user + "' is not a valid Trello user name.");
+        }
+      });
     }
-    trello.get("/1/members/" + user, function(err, data) {
-      if (! err) {
-        fulfill(data);
-      } else {
-        util.log("[ERROR] Unable to get user information from Trello API.");
-        reject("The name '" + user + "' is not a valid Trello user name.");
-      }
-    });
   });    
 }
 
