@@ -604,13 +604,98 @@ var chatCommands = [
   help: "The command " + commandChar + "usermod modifies a user in the Mod Squad member list.\n" +
     "\nUsage: " + commandChar + "usermod <CU User Name> <parameters>\n" +
     "\nAvailable Parameters:" +
-    "\n  -g <GitHub Username> = Specify a new GitHub user name for the Mod Squad member" +
-    "\n  -t <Trello Username> = Specify a new Trello user name for the Mod Squad member", 
+    "\n  -g <GitHub User Name> = Specify a new GitHub user name for the Mod Squad member" +
+    "\n  -t <Trello User Name> = Specify a new Trello user name for the Mod Squad member", 
   exec: function(server, room, sender, message, extras) {
     if (! extras || ! extras.motdadmin) {
       return sendReply(server, room, sender, "You do not have permission to modify a user.");
     }
-    sendReply(server, room, sender, "This command is not yet implemented. Coming soon(tm)!");
+
+    var params = getParams(this.command, message);
+    if (! params.length > 0) {
+      return sendReply(server, room, sender, "You must provide a user name to modify. Type `" + commandChar + "help usermod` for help.");
+    }
+    var paramArray = params.split(' ');
+    var existingMember = false;
+    var userToMod = null;
+    memberData.forEach(function(member) {
+      if (member.cuUser.toLowerCase() === paramArray[0].toLowerCase()) {
+        userToMod = paramArray[0];
+        existingMember = true;
+      }
+    });
+    if (! existingMember) {
+      return sendReply(server, room, sender, "The user '" + paramArray[0] + "' does not exist in the Mod Squad member list.");
+    }
+
+    for (var i = 1; i < paramArray.length; i++) {
+      switch(paramArray[i]) {
+        case '-g':
+          // verify next param exists
+          if (paramArray[i + 1].search(/^[^\-]+/) === -1) {
+            sendReply(server, room, sender, "The value following '-g' must be a user name.");
+            return;
+          }
+          var newGitHubName = paramArray[i + 1];
+          i++;
+          break;
+        case '-t':
+          // verify next param exists
+          if (paramArray[i + 1].search(/^[^\-]+/) === -1) {
+            sendReply(server, room, sender, "The value following '-t' must be a user name.");
+            return;
+          }
+          var newTrelloName = paramArray[i + 1];
+          i++;
+          break;
+      }
+    }
+
+    if (! newGitHubName && ! newTrelloName) {
+      return sendReply(server, room, sender, "No parameters specified. Type `" + commandChar + "help usermod` for help.");
+    }
+
+    // verify GitHub and Trello user names are valid
+    var promiseArray = [];
+    if (newGitHubName) promiseArray.push(getGitHubUser(newGitHubName));
+    if (newTrelloName) promiseArray.push(getTrelloUser(newTrelloName));
+
+    Promise.all(promiseArray).then(function(data) {
+      // update memberData with new GitHub information
+      if (newGitHubName) {
+        console.log('length: ' + memberData.length);
+        for (var i = 0; i < memberData.length; i++) {
+          if (memberData[i].cuUser.toLowerCase() === userToMod.toLowerCase()) memberData[i].githubUser = newGitHubName;
+        }
+      }
+
+      // update memberData with new Trello information
+      if (newTrelloName) {
+        if (promiseArray.length > 1) {
+          var newFullName = data[1].fullName;
+        } else {
+          var newFullName = data[0].fullName;
+        }
+        for (var i = 0; i < memberData.length; i++) {
+          if (memberData[i].cuUser.toLowerCase() === userToMod.toLowerCase()) {
+            memberData[i].trelloUser = newTrelloName;
+            memberData[i].trelloName = newFullName;
+          }
+        }
+      }
+
+      // write memberData changes to file
+      fs.writeFile(config.memberFile, JSON.stringify(memberData), function(err) {
+        if (err) {
+          return util.log("[ERROR] Unable to write to member data file.");
+        }
+        sendReply(server, room, sender, "User '" + userToMod + "' has been modified.");
+        util.log("[STATUS] User '" + userToMod + "' modified in Mod Squad member list.");
+      });
+
+    }, function(error) {
+      sendReply(server, room, sender, error);
+    });
   }
 },
 { // #### USERLIST COMMAND ####
