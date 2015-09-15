@@ -45,6 +45,11 @@ An XMPP Chat bot for Mod Squad
                         the user name. The following additional parameters are available:
                            -g <name> = Specify a new GitHub user name
                            -t <name> = Specify a new Trello user name
+
+!userlist             - This will send a private message containing the full Mod Squad member list.
+
+!whois <name>         - This will search the Mod Squad member list for a particular user and display
+                        their information.
 ```
 
 ### Current Features:
