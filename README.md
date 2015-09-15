@@ -33,7 +33,18 @@ An XMPP Chat bot for Mod Squad
 !repos [org]          - This shows all repositories for the monitored GitHub organizations. If the [org]
                         parameter is supplied, only repositories for that organization will be shown.
 
-!tips                - This can show tips related to Mod Squad activities.
+!tips                 - This can show tips related to Mod Squad activities.
+
+!useradd <CU user name> <GitHub user name> <Trello user name>
+                      - This adds a user to the Mod Squad member list. All three parameters must be
+                        supplied. If a GitHub or Trello user name is not available, enter 'none'.
+
+!userdel <user>       - This deletes a user from the Mod Squad member list.
+
+!usermod <parameters> - This modifies a user in the Mod Squad member list. The first parameter must be
+                        the user name. The following additional parameters are available:
+                           -g <name> = Specify a new GitHub user name
+                           -t <name> = Specify a new Trello user name
 ```
 
 ### Current Features:
@@ -42,6 +53,4 @@ An XMPP Chat bot for Mod Squad
  * The bot will monitor the GitHub API and automatically announce new or updated issues to the Mod Squad conference room.
  
 ### Planned Features:
- * Add !whois command to list GitHub, Trello, and CSE usernames for each Mod Squad member.
- * Add !useradd command to add Mod Squad users (for use with !whois command).
  * The bot will monitor the Trello API and automatically announce new or updated cards.
