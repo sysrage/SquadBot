@@ -6,6 +6,7 @@ Requires:
  - Node.js
  - github
  - moment
+ - node-trello
  - node-xmpp
  - request
  - bluebird*
@@ -27,6 +28,7 @@ var fs = require('fs');
 
 var githubAPI = require('github');
 var moment = require('moment');
+var trelloAPI = require('node-trello');
 var xmpp = require('node-xmpp');
 var request = require('request');
 
@@ -511,6 +513,153 @@ var chatCommands = [
     sendReply(server, room, sender, "Quick Tips: Welcome to the Mod Squad. Tips coming soon(tm)!");
   }
 },
+{ // #### USERADD COMMAND ####
+  command: 'useradd',
+  help: "The command " + commandChar + "useradd adds a user to the Mod Squad member list.\n" +
+    "\nUsage: " + commandChar + "useradd <CU User Name> <GitHub User Name> <Trello User Name>\n" +
+    "\nIf a GitHub user name or Trello user name is unknown, enter 'none' for that item.", 
+  exec: function(server, room, sender, message, extras) {
+    if (! extras || ! extras.motdadmin) {
+      return sendReply(server, room, sender, "You do not have permission to add a user.");
+    }
+    var params = getParams(this.command, message);
+    if (! params.length > 0) {
+      return sendReply(server, room, sender, "Usage: " + commandChar + "useradd <CU User Name> <GitHub User Name> <Trello User Name>");
+    }
+    var aNames = params.split(' ');
+    if (aNames.length !== 3) {
+      return sendReply(server, room, sender, "Usage: " + commandChar + "useradd <CU User Name> <GitHub User Name> <Trello User Name>");
+    }
+    var curISODate = new Date().toISOString();
+    var cName = aNames[0];
+    var gName = aNames[1];
+    var tName = aNames[2];
+    var existingMember = false;
+    memberData.forEach(function(user) {
+      if (user.cuUser.toLowerCase() === cName.toLowerCase()) existingMember = true;
+    });
+    if (existingMember) {
+      return sendReply(server, room, sender, "The user '" + cName + "' already exists.");
+    }
+
+    var githubPromise = getGitHubUser(gName);
+    var trelloPromise = getTrelloUser(tName);
+    Promise.all([githubPromise, trelloPromise]).then(function(data) {
+      var tFullName = data[1].fullName;
+      memberData.push({
+        cuUser: cName,
+        githubUser: gName,
+        trelloUser: tName,
+        trelloName: tFullName,
+        addDate: curISODate
+      });
+      fs.writeFile(config.memberFile, JSON.stringify(memberData), function(err) {
+        if (err) {
+          return util.log("[ERROR] Unable to write to member data file.");
+        }
+        sendReply(server, room, sender, "User '" + cName + "' added to the Mod Squad member list.");
+        util.log("[STATUS] User '" + cName + "' added to Mod Squad member list.");
+      });
+    }, function(error) {
+      sendReply(server, room, sender, error);
+    });
+  }
+},
+{ // #### USERDEL COMMAND ####
+  command: 'userdel',
+  help: "The command " + commandChar + "userdel removes a user from the Mod Squad member list.\n" +
+    "\nUsage: " + commandChar + "userdel <CU User Name>",
+  exec: function(server, room, sender, message, extras) {
+    if (! extras || ! extras.motdadmin) {
+      return sendReply(server, room, sender, "You do not have permission to add a user.");
+    }
+    var params = getParams(this.command, message);
+    if (! params.length > 0) {
+      return sendReply(server, room, sender, "You must supply a user name to delete. Type " + commandChar + "help userdel for information.");
+    }
+    var dName = params.split(' ')[0].toLowerCase();
+    var existingMember = false;
+    for (var i = 0; i < memberData.length; i++) {
+      if (memberData[i].cuUser.toLowerCase() === dName) {
+        existingMember = true;
+        memberData.splice(i, 1);
+        i--;
+      }
+    }
+    if (existingMember) {
+      fs.writeFile(config.memberFile, JSON.stringify(memberData), function(err) {
+        if (err) {
+          return util.log("[ERROR] Unable to write to member data file.");
+        }
+        sendReply(server, room, sender, "The user '" + dName + "' has been deleted from the Mod Squad member list.");
+        util.log("[STATUS] User '" + dName + "' deleted from Mod Squad member list.");
+      });
+    } else {
+      sendReply(server, room, sender, "The user '" + dName + "' does not exist in the Mod Squad member list.");
+    }
+  }
+},
+{ // #### USERMOD COMMAND ####
+  command: 'usermod',
+  help: "The command " + commandChar + "usermod modifies a user in the Mod Squad member list.\n" +
+    "\nUsage: " + commandChar + "usermod <CU User Name> <parameters>\n" +
+    "\nAvailable Parameters:" +
+    "\n  -g <GitHub Username> = Specify a new GitHub user name for the Mod Squad member" +
+    "\n  -t <Trello Username> = Specify a new Trello user name for the Mod Squad member", 
+  exec: function(server, room, sender, message, extras) {
+    if (! extras || ! extras.motdadmin) {
+      return sendReply(server, room, sender, "You do not have permission to modify a user.");
+    }
+    sendReply(server, room, sender, "This command is not yet implemented. Coming soon(tm)!");
+  }
+},
+{ // #### USERLIST COMMAND ####
+  command: 'userlist',
+  help: "The command " + commandChar + "userlist displays all users in the Mod Squad member list.\n" +
+    "\nUsage: " + commandChar + "userlist", 
+  exec: function(server, room, sender, message, extras) {
+    // send message as PM to user calling !userlist
+    if (room !== 'pm') {
+      sendReply(server, room, sender, "Mod Squad member list sent to " + sender.split("@")[0] + ".");
+      room = 'pm';
+      sender = sender + '@' + server.address;               
+    }
+    var sortedMembers = memberData.concat().sort(function(a, b) { return a.cuUser.localeCompare(b.cuUser) });
+    var userList = "The following users are members of the Mod Squad:";
+    sortedMembers.forEach(function(member, index) {
+      cName = member.cuUser;
+      gName = member.githubUser;
+      tName = member.trelloUser;
+      tFullName = member.trelloName;
+      userList += "\n #" + (index + 1) + ") " + cName + " is known as " + gName + " on GitHub and " + tFullName + " (@" + tName + ") on Trello.";
+    });
+    sendReply(server, room, sender, userList);
+  }
+},
+{ // #### WHOIS COMMAND ####
+  command: 'whois',
+  help: "The command " + commandChar + "whois displays information about a particular Mod Squad member.\n" +
+    "\nUsage: " + commandChar + "whois <username>", 
+  exec: function(server, room, sender, message, extras) {
+    var params = getParams(this.command, message);
+    if (! params.length > 0) {
+      return sendReply(server, room, sender, "You must supply a user name.");
+    }
+    var sName = params.split(' ')[0].toLowerCase();
+    var existingMember = false;
+    memberData.forEach(function(member) {
+      cName = member.cuUser;
+      gName = member.githubUser;
+      tName = member.trelloUser;
+      tFullName = member.trelloName;
+      if (sName === cName.toLowerCase() || sName === gName.toLowerCase() || sName === tName.toLowerCase()) {
+        existingMember = true;
+        return sendReply(server, room, sender, cName + " is known as " + gName + " on GitHub and " + tFullName + " (@" + tName + ") on Trello.");
+      }
+    });
+    if (! existingMember) sendReply(server, room, sender, "No user named '" + sName + "' exists in the Mod Squad member list.");
+  }
+},
 ];
 
 // Add list of available commands to the output of !help
@@ -748,6 +897,23 @@ function getChatlog(server) {
   });
 }
 
+// function to read in the saved member data
+function getMemberData() {
+  fs.readFile(config.memberFile, function(err, data) {
+    if (err && err.code === 'ENOENT') {
+      memberData = [];
+      fs.writeFile(config.memberFile, JSON.stringify(memberData), function(err) {
+        if (err) {
+          return util.log("[ERROR] Unable to create member data file.");
+        }
+        util.log("[STATUS] Member data file did not exist. Empty file created.");
+      });
+    } else {
+      memberData = JSON.parse(data);
+    }
+  });
+}
+
 // function to read in the MOTD file
 function getMOTD(server) {
   fs.readFile(server.motdFile, function(err, data) {
@@ -818,6 +984,44 @@ function getGitHubData() {
   });
 }
 
+// function to get user information from the GitHub API
+function getGitHubUser(user) {
+  return new Promise(function (fulfill, reject) {
+    if (! user) {
+      reject('No username specified.');
+    } else {
+      gitAuth();
+      github.user.getFrom({
+        user: user
+      }, function(err, res) {
+        if (! err) {
+          fulfill(res);
+        } else {
+          util.log("[ERROR] Unable to get user information from GitHub API.");
+          reject("The name '" + user + "' is not a valid GitHub user name.");
+        }
+      });
+    }
+  });    
+}
+
+// function to get user information from the Trello API
+function getTrelloUser(user) {
+  return new Promise(function (fulfill, reject) {
+    if (! user) {
+      reject('No username specified.');
+    }
+    trello.get("/1/members/" + user, function(err, data) {
+      if (! err) {
+        fulfill(data);
+      } else {
+        util.log("[ERROR] Unable to get user information from Trello API.");
+        reject("The name '" + user + "' is not a valid Trello user name.");
+      }
+    });
+  });    
+}
+
 // function to authenticate with GitHub API
 function gitAuth() {
   github.authenticate({
@@ -867,7 +1071,10 @@ function isGameServerUp(server, attempt, callback) {
 // function to check if user is an MOTD admin
 var isMOTDAdmin = function(name) {
   for (var i = 0; i < config.motdAdmins.length; i++) {
-    if (config.motdAdmins[i] === name) return true;
+    if (config.motdAdmins[i].toLowerCase() === name.toLowerCase()) return true;
+  }
+  for (var i = 0; i < memberData.length; i++) {
+    if (memberData[i].cuUser.toLowerCase() === name.toLowerCase()) return true;
   }
   return false;
 };
@@ -1430,7 +1637,10 @@ function restartClient(server) {
   startClient(server);
 }
 
-// Initial GitHub startup
+// Initial startup
+var memberData = [];
+getMemberData();
+
 var githubData = {};
 getGitHubData();
 var github = new githubAPI({
@@ -1444,7 +1654,9 @@ var github = new githubAPI({
   }
 });
 
-// Initial XMPP client startup
+var trelloData = {};
+var trello = new trelloAPI(config.trelloAPIKey);
+
 var client = [];
 config.servers.forEach(function(server) {
   // Connect to REST API
