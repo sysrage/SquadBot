@@ -624,7 +624,7 @@ var chatCommands = [
       room = 'pm';
       sender = sender + '@' + server.address;               
     }
-    var sortedMembers = memberData.concat().sort(function(a, b) { return a.cuUser.localeCompare(b.cuUser) });
+    var sortedMembers = memberData.concat().sort(function(a, b) { return a.cuUser.toLowerCase().localeCompare(b.cuUser.toLowerCase()) });
     var userList = "The following users are members of the Mod Squad:";
     sortedMembers.forEach(function(member, index) {
       cName = member.cuUser;
@@ -652,7 +652,7 @@ var chatCommands = [
       gName = member.githubUser;
       tName = member.trelloUser;
       tFullName = member.trelloName;
-      if (sName === cName.toLowerCase() || sName === gName.toLowerCase() || sName === tName.toLowerCase()) {
+      if (cName.toLowerCase().search(sName) > -1 || gName.toLowerCase().search(sName) > -1 || tName.toLowerCase().search(sName) > -1 || tFullName.toLowerCase().search(sName) > -1) {
         existingMember = true;
         return sendReply(server, room, sender, cName + " is known as " + gName + " on GitHub and " + tFullName + " (@" + tName + ") on Trello.");
       }
