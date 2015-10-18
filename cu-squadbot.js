@@ -59,6 +59,27 @@ var chatCommands = [
     }
   }
 },
+{ // #### ASSIST COMMAND ####
+  command: 'assist',
+  help: "The command " + commandChar + "assist displays current Trello cards in the 'Need Assistance' list.\n" +
+    "\nUsage: " + commandChar + "assist",
+  exec: function(server, room, sender, message, extras) {
+    var assistURLs = "";
+
+    trelloAllAssists().then(function(assists) {
+      if (assists.length > 0) {
+          assists.forEach(function(assist, index) {
+            assistURLs += "\n   " + (index + 1) + ": " + assist.shortUrl;
+          });
+          sendReply(server, room, sender, "There are currently " + assists.length + " Trello cards marked as needing assistance:" + assistURLs);
+      } else {
+        sendReply(server, room, sender, "No Trello cards currently marked as needing assistance.");
+      }
+    }, function(error) {
+      sendReply(server, room, sender, error);
+    });
+  }
+},
 { // #### BOTINFO COMMAND ####
   command: 'botinfo',
   help: "The command " + commandChar + "botinfo displays information about this chatbot.\n" +
@@ -159,9 +180,9 @@ var chatCommands = [
             break;
           default:
             // Allow ##h and ##m for hours and minutes
-            if (paramArray[i].search(/[0-9]+[Hh]/) !== -1) searchHours = parseInt(paramArray[i]);
-            if (paramArray[i].search(/[0-9]+[Mm]/) !== -1) searchMins = parseInt(paramArray[i]);
-            if (paramArray[i].search(/[0-9]+/) !== -1) searchHours = parseInt(paramArray[i]);
+            if (paramArray[i].search(/^[0-9]+[Hh]$/) !== -1) searchHours = parseInt(paramArray[i]);
+            if (paramArray[i].search(/^[0-9]+[Mm]$/) !== -1) searchMins = parseInt(paramArray[i]);
+            if (paramArray[i].search(/^[0-9]+$/) !== -1) searchHours = parseInt(paramArray[i]);
             break;
         }
       }
@@ -237,7 +258,7 @@ var chatCommands = [
   exec: function(server, room, sender, message, extras) {
     var contribUsers = [];
     var contribList = "";
-    getAllContribs().then(function(contribs) {
+    githubAllContribs().then(function(contribs) {
       if (contribs.length > 0) {
         for (var i = 0; i < contribs.length; i++) {
           if (contribUsers.indexOf(contribs[i].login) === -1) contribUsers.push(contribs[i].login);
@@ -270,7 +291,7 @@ var chatCommands = [
       var targetOrgText = "all monitored GitHub organizations";
     }
 
-    getAllIssues(filter).then(function(issues) {
+    githubAllIssues(filter).then(function(issues) {
       if (issues.length > 0) {
         if (! filter && issues.length > 5) {
           for (var i = 0; i < 5; i++) {
@@ -416,7 +437,7 @@ var chatCommands = [
       var targetOrgText = "all monitored GitHub organizations";
     }
 
-    getAllPullRequests(filter).then(function(prs) {
+    githubAllPullRequests(filter).then(function(prs) {
       if (prs.length > 0) {
         if (! filter && prs.length > 5) {
           for (var i = 0; i < 5; i++) {
@@ -469,7 +490,7 @@ var chatCommands = [
       var targetOrgText = "all monitored GitHub organizations";
     }
 
-    getAllRepos(targetOrg).then(function(repos) {
+    githubAllRepos(targetOrg).then(function(repos) {
       if (repos.length > 0) {
         repos.forEach(function(repo, index) {
           repoURLs += "\n   " + (index + 1) + ": " + repo.full_name + " - " + repo.html_url;
@@ -663,7 +684,6 @@ var chatCommands = [
     Promise.all(promiseArray).then(function(data) {
       // update memberData with new GitHub information
       if (newGitHubName) {
-        console.log('length: ' + memberData.length);
         for (var i = 0; i < memberData.length; i++) {
           if (memberData[i].cuUser.toLowerCase() === userToMod.toLowerCase()) memberData[i].githubUser = newGitHubName;
         }
@@ -769,202 +789,6 @@ function checkInternet(server, callback) {
   })
 }
 
-// function to obtain all contributors for every repo owned by all monitored users
-function getAllContribs() {
-  return new Promise(function (fulfill, reject) {
-    var allContribs = [];
-    getAllRepos().then(function(repos) {
-      var repoCount = repos.length;
-      repos.forEach(function(repo) {
-        gitAuth();
-        github.repos.getContributors({
-          user: repo.owner.login,
-          repo: repo.name
-        }, function(err, res) {
-          repoCount--;
-          if (! err) {
-            allContribs = allContribs.concat(res);
-          } else {
-            util.log("[ERROR] Error pulling list of contributors for '" + repo.owner.login + "/" + repo.name + "'.");
-          }
-          if (repoCount === 0) fulfill(allContribs);
-        });
-      });
-    });
-  });
-}
-
-// function to obtain all events for every repo owned by all monitored users
-function getAllEvents() {
-  return new Promise(function (fulfill, reject) {
-    var allEvents = [];
-    var orgCount = config.githubOrgs.length;
-    config.githubOrgs.forEach(function(ghUser, index, array) {
-      gitAuth();
-      github.events.getFromOrg({
-        org: ghUser
-      }, function(err, res) {
-        orgCount--;
-        if (! err) {
-          allEvents = allEvents.concat(res);
-        } else {
-          util.log("[ERROR] Error pulling list of events for '" + ghUser + "'.");
-        }
-        if (orgCount === 0) fulfill(allEvents);
-      });
-    });
-  });
-}
-
-// function to obtain all issues for every repo owned by all monitored users
-function getAllIssues(filter) {
-  return new Promise(function (fulfill, reject) {
-    var allIssues = [];
-    var orgName = null;
-    var repoName = null;
-
-    if (filter) {
-      if (filter.indexOf('/') > -1) {
-        orgName = filter.split('/')[0];
-        repoName = filter.split('/')[1];
-        var validOrg = false;
-        for (var i = 0; i < config.githubOrgs.length; i++) {
-          if (config.githubOrgs[i].toLowerCase() === orgName.toLowerCase()) validOrg = true;
-        }
-        if (! validOrg) return reject("The organization named '" + orgName + "' is not a monitored GitHub organization.");
-      } else {
-        var validOrg = false;
-        for (var i = 0; i < config.githubOrgs.length; i++) {
-          if (config.githubOrgs[i].toLowerCase() === filter.toLowerCase()) validOrg = true;
-        }
-        if (validOrg) {
-          orgName = filter;
-        } else {
-          repoName = filter;
-        }
-      }
-    }
-
-    getAllRepos(orgName).then(function(repos) {
-      if (repoName) {
-        for (var i = 0; i < repos.length; i++) {
-          if (repos[i].name.toLowerCase() !== repoName.toLowerCase()) {
-            repos.splice(i, 1);
-            i--;
-          }
-        }
-        if (repos.length < 1) fulfill(allIssues);
-      }
-
-      var repoCount = repos.length;
-      repos.forEach(function(repo) {
-        gitAuth();
-        github.issues.repoIssues({
-          user: repo.owner.login,
-          repo: repo.name,
-          state: 'open'
-        }, function(err, res) {
-          repoCount--;
-          if (! err) {
-            allIssues = allIssues.concat(res);
-          } else {
-            util.log("[ERROR] Error pulling list of issues for '" + repo.owner.login + "/" + repo.name + "'.");
-          }
-          if (repoCount === 0) fulfill(allIssues);
-        });
-      });
-    });
-  });
-}
-
-// function to obtain all pull reqeusts for every repo owned by all monitored users
-function getAllPullRequests(filter) {
-  return new Promise(function (fulfill, reject) {
-    var allPullRequests = [];
-    var orgName = null;
-    var repoName = null;
-
-    if (filter) {
-      if (filter.indexOf('/') > -1) {
-        orgName = filter.split('/')[0];
-        repoName = filter.split('/')[1];
-        var validOrg = false;
-        for (var i = 0; i < config.githubOrgs.length; i++) {
-          if (config.githubOrgs[i].toLowerCase() === orgName.toLowerCase()) validOrg = true;
-        }
-        if (! validOrg) return reject("The organization named '" + orgName + "' is not a monitored GitHub organization.");
-      } else {
-        var validOrg = false;
-        for (var i = 0; i < config.githubOrgs.length; i++) {
-          if (config.githubOrgs[i].toLowerCase() === filter.toLowerCase()) validOrg = true;
-        }
-        if (validOrg) {
-          orgName = filter;
-        } else {
-          repoName = filter;
-        }
-      }
-    }
-
-    getAllRepos(orgName).then(function(repos) {
-      if (repoName) {
-        for (var i = 0; i < repos.length; i++) {
-          if (repos[i].name.toLowerCase() !== repoName.toLowerCase()) {
-            repos.splice(i, 1);
-            i--;
-          }
-        }
-        if (repos.length < 1) fulfill(allPullRequests);
-      }
-
-      var repoCount = repos.length;
-      repos.forEach(function(repo, index, array) {
-        gitAuth();
-        github.pullRequests.getAll({
-          user: repo.owner.login,
-          repo: repo.name
-        }, function(err, res) {
-          repoCount--;
-          if (! err) {
-            allPullRequests = allPullRequests.concat(res);
-          } else {
-            util.log("[ERROR] Error pulling list of pull requests for '" + repo.owner.login + "/" + repo.name + "'.");
-          }
-          if (repoCount === 0) fulfill(allPullRequests);
-        });
-      });
-    });
-  });
-}
-
-// function to obtain all repos owned by all monitored organizations
-function getAllRepos(org) {
-  return new Promise(function (fulfill, reject) {
-    var allRepos = [];
-    if (org) {
-      var orgsToSearch = [org];
-    } else {
-      var orgsToSearch = config.githubOrgs;
-    }
-    var orgCount = orgsToSearch.length;
-
-    orgsToSearch.forEach(function(ghUser, index, array) {
-      gitAuth();
-      github.repos.getFromOrg({
-        org: ghUser
-      }, function(err, res) {
-        orgCount--;
-        if (! err) {
-          allRepos = allRepos.concat(res);
-        } else {
-          util.log("[ERROR] Error pulling list of repositories for '" + ghUser + "'.");
-        }
-        if (orgCount === 0) fulfill(allRepos);
-      });
-    });
-  });    
-}
-
 // function to read in the saved chatlog
 function getChatlog(server) {
   fs.readFile(server.chatlogFile, function(err, data) {
@@ -1048,7 +872,16 @@ function getParams(command, message, index) {
   }
 }
 
-// function to read in the saved GitHub pull request data
+// function to authenticate with GitHub API
+function githubAuth() {
+  github.authenticate({
+    type: "basic",
+    username: config.githubUsername,
+    password: config.githubAPIToken
+  });
+}
+
+// function to read in the saved GitHub data
 function getGitHubData() {
   fs.readFile(config.githubFile, function(err, data) {
     if (err && err.code === 'ENOENT') {
@@ -1077,7 +910,7 @@ function getGitHubUser(user) {
     } else if (user === 'none') {
       fulfill({});
     } else {
-      gitAuth();
+      githubAuth();
       github.user.getFrom({
         user: user
       }, function(err, res) {
@@ -1090,6 +923,221 @@ function getGitHubUser(user) {
       });
     }
   });    
+}
+
+// function to obtain all contributors for every GitHub repo owned by all monitored organizations
+function githubAllContribs() {
+  return new Promise(function (fulfill, reject) {
+    var allContribs = [];
+    githubAllRepos().then(function(repos) {
+      var repoCount = repos.length;
+      repos.forEach(function(repo) {
+        githubAuth();
+        github.repos.getContributors({
+          user: repo.owner.login,
+          repo: repo.name
+        }, function(err, res) {
+          repoCount--;
+          if (! err) {
+            allContribs = allContribs.concat(res);
+          } else {
+            util.log("[ERROR] Error pulling list of contributors for '" + repo.owner.login + "/" + repo.name + "'.");
+          }
+          if (repoCount === 0) fulfill(allContribs);
+        });
+      });
+    });
+  });
+}
+
+// function to obtain all events for every repo owned by all monitored organizations
+function githubAllEvents() {
+  return new Promise(function (fulfill, reject) {
+    var allEvents = [];
+    var orgCount = config.githubOrgs.length;
+    config.githubOrgs.forEach(function(ghUser, index, array) {
+      githubAuth();
+      github.events.getFromOrg({
+        org: ghUser
+      }, function(err, res) {
+        orgCount--;
+        if (! err) {
+          allEvents = allEvents.concat(res);
+        } else {
+          util.log("[ERROR] Error pulling list of events for '" + ghUser + "'.");
+        }
+        if (orgCount === 0) fulfill(allEvents);
+      });
+    });
+  });
+}
+
+// function to obtain all issues for every repo owned by all monitored organizations
+function githubAllIssues(filter) {
+  return new Promise(function (fulfill, reject) {
+    var allIssues = [];
+    var orgName = null;
+    var repoName = null;
+
+    if (filter) {
+      if (filter.indexOf('/') > -1) {
+        orgName = filter.split('/')[0];
+        repoName = filter.split('/')[1];
+        var validOrg = false;
+        for (var i = 0; i < config.githubOrgs.length; i++) {
+          if (config.githubOrgs[i].toLowerCase() === orgName.toLowerCase()) validOrg = true;
+        }
+        if (! validOrg) return reject("The organization named '" + orgName + "' is not a monitored GitHub organization.");
+      } else {
+        var validOrg = false;
+        for (var i = 0; i < config.githubOrgs.length; i++) {
+          if (config.githubOrgs[i].toLowerCase() === filter.toLowerCase()) validOrg = true;
+        }
+        if (validOrg) {
+          orgName = filter;
+        } else {
+          repoName = filter;
+        }
+      }
+    }
+
+    githubAllRepos(orgName).then(function(repos) {
+      if (repoName) {
+        for (var i = 0; i < repos.length; i++) {
+          if (repos[i].name.toLowerCase() !== repoName.toLowerCase()) {
+            repos.splice(i, 1);
+            i--;
+          }
+        }
+        if (repos.length < 1) fulfill(allIssues);
+      }
+
+      var repoCount = repos.length;
+      repos.forEach(function(repo) {
+        githubAuth();
+        github.issues.repoIssues({
+          user: repo.owner.login,
+          repo: repo.name,
+          state: 'open'
+        }, function(err, res) {
+          repoCount--;
+          if (! err) {
+            allIssues = allIssues.concat(res);
+          } else {
+            util.log("[ERROR] Error pulling list of issues for '" + repo.owner.login + "/" + repo.name + "'.");
+          }
+          if (repoCount === 0) fulfill(allIssues);
+        });
+      });
+    });
+  });
+}
+
+// function to obtain all pull reqeusts for every repo owned by all monitored users
+function githubAllPullRequests(filter) {
+  return new Promise(function (fulfill, reject) {
+    var allPullRequests = [];
+    var orgName = null;
+    var repoName = null;
+
+    if (filter) {
+      if (filter.indexOf('/') > -1) {
+        orgName = filter.split('/')[0];
+        repoName = filter.split('/')[1];
+        var validOrg = false;
+        for (var i = 0; i < config.githubOrgs.length; i++) {
+          if (config.githubOrgs[i].toLowerCase() === orgName.toLowerCase()) validOrg = true;
+        }
+        if (! validOrg) return reject("The organization named '" + orgName + "' is not a monitored GitHub organization.");
+      } else {
+        var validOrg = false;
+        for (var i = 0; i < config.githubOrgs.length; i++) {
+          if (config.githubOrgs[i].toLowerCase() === filter.toLowerCase()) validOrg = true;
+        }
+        if (validOrg) {
+          orgName = filter;
+        } else {
+          repoName = filter;
+        }
+      }
+    }
+
+    githubAllRepos(orgName).then(function(repos) {
+      if (repoName) {
+        for (var i = 0; i < repos.length; i++) {
+          if (repos[i].name.toLowerCase() !== repoName.toLowerCase()) {
+            repos.splice(i, 1);
+            i--;
+          }
+        }
+        if (repos.length < 1) fulfill(allPullRequests);
+      }
+
+      var repoCount = repos.length;
+      repos.forEach(function(repo, index, array) {
+        githubAuth();
+        github.pullRequests.getAll({
+          user: repo.owner.login,
+          repo: repo.name
+        }, function(err, res) {
+          repoCount--;
+          if (! err) {
+            allPullRequests = allPullRequests.concat(res);
+          } else {
+            util.log("[ERROR] Error pulling list of pull requests for '" + repo.owner.login + "/" + repo.name + "'.");
+          }
+          if (repoCount === 0) fulfill(allPullRequests);
+        });
+      });
+    });
+  });
+}
+
+// function to obtain all repos owned by all monitored organizations
+function githubAllRepos(org) {
+  return new Promise(function (fulfill, reject) {
+    var allRepos = [];
+    if (org) {
+      var orgsToSearch = [org];
+    } else {
+      var orgsToSearch = config.githubOrgs;
+    }
+    var orgCount = orgsToSearch.length;
+
+    orgsToSearch.forEach(function(ghUser, index, array) {
+      githubAuth();
+      github.repos.getFromOrg({
+        org: ghUser
+      }, function(err, res) {
+        orgCount--;
+        if (! err) {
+          allRepos = allRepos.concat(res);
+        } else {
+          util.log("[ERROR] Error pulling list of repositories for '" + ghUser + "'.");
+        }
+        if (orgCount === 0) fulfill(allRepos);
+      });
+    });
+  });    
+}
+
+// function to read in the saved Trello data
+function getTrelloData() {
+  fs.readFile(config.trelloFile, function(err, data) {
+    if (err && err.code === 'ENOENT') {
+      trelloData = {
+        lastAction: "2011-09-01T00:00:00.000Z",
+      };
+      fs.writeFile(config.trelloFile, JSON.stringify(trelloData), function(err) {
+        if (err) {
+          return util.log("[ERROR] Unable to create Trello data file.");
+        }
+        util.log("[STATUS] Trello data file did not exist. Empty file created.");
+      });
+    } else {
+      trelloData = JSON.parse(data);
+    }
+  });
 }
 
 // function to get user information from the Trello API
@@ -1112,12 +1160,36 @@ function getTrelloUser(user) {
   });    
 }
 
-// function to authenticate with GitHub API
-function gitAuth() {
-  github.authenticate({
-    type: "basic",
-    username: config.githubUsername,
-    password: config.githubAPIToken
+// function to obtain all actions on all monitored Trello boards
+function trelloAllActions() {
+  return new Promise(function (fulfill, reject) {
+    var allActions = [];
+    var boardCount = config.trelloBoards.length;
+    config.trelloBoards.forEach(function(boardID, index, array) {
+      trello.get('/1/boards/' + boardID + '/actions', function(err, data) {
+        boardCount--;
+        if (! err) {
+          allActions = allActions.concat(data);
+        } else {
+          util.log("[ERROR] Error pulling list of actions for board '" + boardID + "'.");
+        }
+        if (boardCount === 0) fulfill(allActions);
+      });
+    });
+  });
+}
+
+// function to obtain all cards in the 'Need Assistance' Trello list
+function trelloAllAssists() {
+  return new Promise(function (fulfill, reject) {
+    trello.get('/1/lists/' + config.trelloAssistList + '/cards', function(err, data) {
+      if (! err) {
+        fulfill(data);
+      } else {
+        util.log("[ERROR] Error pulling assist list from Trello API");
+        reject("Error pulling assist list from Trello API");
+      }
+    });
   });
 }
 
@@ -1345,7 +1417,7 @@ function checkGitHub(server) {
   var tempLastPR = githubData.lastPR;
 
   // Poll for all events
-  getAllEvents().then(function(events) {
+  githubAllEvents().then(function(events) {
     events.reverse();
     for (var i = 0; i < events.length; i++) {
       var event = events[i];
@@ -1467,6 +1539,85 @@ function checkGitHub(server) {
   });
 }
 
+// Timer to monitor GitHub and announce updates
+var timerTrello = function(server) { return setInterval(function() { checkTrello(server); }, 30000); };
+function checkTrello(server) {
+  var curISODate = new Date().toISOString();
+  var newActionData = false;
+  var tempLastAction = trelloData.lastAction;
+
+  // Poll for all actions
+  trelloAllActions().then(function(actions) {
+    actions.reverse();
+    for (var i = 0; i < actions.length; i++) {
+      var action = actions[i];
+
+      // Handle Actions
+      var diff = moment(action.date).diff(trelloData.lastAction);
+      if (diff > 0) {
+        // Save new issue date
+        if (moment(action.date).diff(tempLastAction) > 0) tempLastAction = action.date;
+        newActionData = true;
+
+        // Announce new information to chat room
+        switch(action.type) {
+          case 'createCard':
+            var chatMessage = action.memberCreator.username + " created the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            break;
+          case 'updateCard':
+            if (action.data.listAfter && action.data.listBefore) {
+              // Card was moved.
+              var chatMessage = action.memberCreator.username + " moved the card '" + action.data.card.name + "' from '" + action.data.listBefore.name + "' to '" + action.data.listAfter.name + "' on the Trello board '" + action.data.board.name + "':" +
+              "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            } else {
+              // Card was modified.
+              var chatMessage = action.memberCreator.username + " modified the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+              "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            }
+            break;
+          case 'addChecklistToCard':
+          case 'removeChecklistFromCard':
+          case 'addAttachmentToCard':
+          case 'deleteAttachmentFromCard':
+            var chatMessage = action.memberCreator.username + " modified the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            break;
+          case 'commentCard':
+            var chatMessage = action.memberCreator.username + " commented on the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            break;
+          case 'addMemberToCard':
+            var chatMessage = action.member.username + " was added to the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            break;
+          case 'removeMemberFromCard':
+            var chatMessage = action.member.username + " was removed from the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            break;
+          case 'moveCardToBoard':
+            var chatMessage = action.memberCreator.username + " moved the card '" + action.data.card.name + "' from the board '" + action.data.boardSource.name + "' to '" + action.data.list.name + "' on the Trello board '" + action.data.board.name + "':" +
+            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            break;
+        }
+        server.rooms.forEach(function(room) {
+          if (room.announce && trelloData.lastAction !== '2011-09-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+        });
+      }
+    }
+
+    if (newActionData) {
+      trelloData.lastAction = tempLastAction;
+      fs.writeFile(config.trelloFile, JSON.stringify(trelloData), function(err) {
+        if (err) {
+          util.log("[ERROR] Unable to write Trello data file.");
+        }
+        util.log("[STATUS] Trello data file updated with new information.");
+      });
+    }
+  });
+}
+
 // Timer to send MOTD messages to joining users.
 var timerMOTD = function(server) { return setInterval(function() { sendMOTD(server); }, 500); };
 function sendMOTD(server) {
@@ -1557,6 +1708,9 @@ function startClient(server) {
 
         // Start monitoring GitHub activity
         client[server.name].githubTimer = timerGitHub(server);
+
+        // Start monitoring Trello activity
+        client[server.name].githubTimer = timerTrello(server);
 
         // Start verifying client is still receiving stanzas
         server.lastStanza = Math.floor((new Date).getTime() / 1000);
@@ -1716,6 +1870,7 @@ function stopClient(server) {
     });
     clearInterval(client[server.name].motdTimer);
     clearInterval(client[server.name].githubTimer);
+    clearInterval(client[server.name].trelloTimer);
     clearInterval(client[server.name].connTimer);
     client[server.name] = undefined;
   }
@@ -1746,6 +1901,7 @@ var github = new githubAPI({
 
 var trelloData = {};
 var trello = new trelloAPI(config.trelloAPIKey);
+getTrelloData();
 
 var client = [];
 config.servers.forEach(function(server) {
