@@ -193,7 +193,7 @@ var chatCommands = [
 
     if (! searchHours && ! searchMins && ! searchRoom && ! searchUser && ! searchText) {
       sendReply(server, room, sender, "Invalid parameters supplied to command. Type `" + commandChar + "help chatlog` for more information.");
-      return;            
+      return;
     }
 
     if (! searchHours && ! searchMins) searchHours = config.chatlogLimit;
@@ -506,7 +506,7 @@ var chatCommands = [
   command: 'tips',
   help: "The command " + commandChar + "tips displays tips for new Mod Squad members.\n" +
     "\nUsage: " + commandChar + "tips [user]\n" +
-    "\nIf [user] is specified, tips will be sent to that user. If 'chat' is specified as the user, tips will be sent to chat.", 
+    "\nIf [user] is specified, tips will be sent to that user. If 'chat' is specified as the user, tips will be sent to chat.",
   exec: function(server, room, sender, message, extras) {
     var params = getParams(this.command, message);
     if (params.length > 0) {
@@ -527,7 +527,7 @@ var chatCommands = [
       sendReply(server, room, sender, "Tips sent to " + sender.split("@")[0] + ".");
       if (room !== 'pm') {
         room = 'pm';
-        sender = sender + '@' + server.address;               
+        sender = sender + '@' + server.address;
       }
     }
 
@@ -538,7 +538,7 @@ var chatCommands = [
   command: 'useradd',
   help: "The command " + commandChar + "useradd adds a user to the Mod Squad member list.\n" +
     "\nUsage: " + commandChar + "useradd <CU User Name> <GitHub User Name> <Trello User Name>\n" +
-    "\nIf a GitHub user name or Trello user name is unknown, enter 'none' for that item.", 
+    "\nIf a GitHub user name or Trello user name is unknown, enter 'none' for that item.",
   exec: function(server, room, sender, message, extras) {
     if (! extras || ! extras.motdadmin) {
       return sendReply(server, room, sender, "You do not have permission to add a user.");
@@ -626,7 +626,7 @@ var chatCommands = [
     "\nUsage: " + commandChar + "usermod <CU User Name> <parameters>\n" +
     "\nAvailable Parameters:" +
     "\n  -g <GitHub User Name> = Specify a new GitHub user name for the Mod Squad member" +
-    "\n  -t <Trello User Name> = Specify a new Trello user name for the Mod Squad member", 
+    "\n  -t <Trello User Name> = Specify a new Trello user name for the Mod Squad member",
   exec: function(server, room, sender, message, extras) {
     if (! extras || ! extras.motdadmin) {
       return sendReply(server, room, sender, "You do not have permission to modify a user.");
@@ -721,13 +721,13 @@ var chatCommands = [
 { // #### USERLIST COMMAND ####
   command: 'userlist',
   help: "The command " + commandChar + "userlist displays all users in the Mod Squad member list.\n" +
-    "\nUsage: " + commandChar + "userlist", 
+    "\nUsage: " + commandChar + "userlist",
   exec: function(server, room, sender, message, extras) {
     // send message as PM to user calling !userlist
     if (room !== 'pm') {
       sendReply(server, room, sender, "Mod Squad member list sent to " + sender.split("@")[0] + ".");
       room = 'pm';
-      sender = sender + '@' + server.address;               
+      sender = sender + '@' + server.address;
     }
     var sortedMembers = memberData.concat().sort(function(a, b) { return a.cuUser.toLowerCase().localeCompare(b.cuUser.toLowerCase()) });
     var userList = "The following users are members of the Mod Squad:";
@@ -744,7 +744,7 @@ var chatCommands = [
 { // #### WHOIS COMMAND ####
   command: 'whois',
   help: "The command " + commandChar + "whois displays information about a particular Mod Squad member.\n" +
-    "\nUsage: " + commandChar + "whois <username>", 
+    "\nUsage: " + commandChar + "whois <username>",
   exec: function(server, room, sender, message, extras) {
     var params = getParams(this.command, message);
     if (! params.length > 0) {
@@ -922,7 +922,7 @@ function getGitHubUser(user) {
         }
       });
     }
-  });    
+  });
 }
 
 // function to obtain all contributors for every GitHub repo owned by all monitored organizations
@@ -1118,7 +1118,7 @@ function githubAllRepos(org) {
         if (orgCount === 0) fulfill(allRepos);
       });
     });
-  });    
+  });
 }
 
 // function to read in the saved Trello data
@@ -1157,7 +1157,7 @@ function getTrelloUser(user) {
         }
       });
     }
-  });    
+  });
 }
 
 // function to obtain all actions on all monitored Trello boards
@@ -1384,7 +1384,7 @@ function updateChatlog(server, room, message) {
       if (moment(curISODate).diff(server.chatlog[roomName][i].timestamp, "hours") > config.chatlogLimit) {
         server.chatlog[roomName].splice(i, 1);
         i--;
-      }            
+      }
     }
   }
 
@@ -1558,50 +1558,51 @@ function checkTrello(server) {
         // Save new issue date
         if (moment(action.date).diff(tempLastAction) > 0) tempLastAction = action.date;
         newActionData = true;
+        var chatMessage = null;
 
         // Announce new information to chat room
         switch(action.type) {
           case 'createCard':
-            var chatMessage = action.memberCreator.username + " created the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
-            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            chatMessage = action.memberCreator.username + " created the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+              "\nhttps://trello.com/c/" + action.data.card.shortLink;
             break;
           case 'updateCard':
             if (action.data.listAfter && action.data.listBefore) {
               // Card was moved.
-              var chatMessage = action.memberCreator.username + " moved the card '" + action.data.card.name + "' from '" + action.data.listBefore.name + "' to '" + action.data.listAfter.name + "' on the Trello board '" + action.data.board.name + "':" +
-              "\nhttps://trello.com/c/" + action.data.card.shortLink;
+              chatMessage = action.memberCreator.username + " moved the card '" + action.data.card.name + "' from '" + action.data.listBefore.name + "' to '" + action.data.listAfter.name + "' on the Trello board '" + action.data.board.name + "':" +
+                "\nhttps://trello.com/c/" + action.data.card.shortLink;
             } else {
               // Card was modified.
-              var chatMessage = action.memberCreator.username + " modified the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
-              "\nhttps://trello.com/c/" + action.data.card.shortLink;
+              // chatMessage = action.memberCreator.username + " modified the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+              //   "\nhttps://trello.com/c/" + action.data.card.shortLink;
             }
             break;
           case 'addChecklistToCard':
           case 'removeChecklistFromCard':
           case 'addAttachmentToCard':
           case 'deleteAttachmentFromCard':
-            var chatMessage = action.memberCreator.username + " modified the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
-            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            chatMessage = action.memberCreator.username + " modified the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+              "\nhttps://trello.com/c/" + action.data.card.shortLink;
             break;
           case 'commentCard':
-            var chatMessage = action.memberCreator.username + " commented on the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
-            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            chatMessage = action.memberCreator.username + " commented on the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+              "\nhttps://trello.com/c/" + action.data.card.shortLink;
             break;
           case 'addMemberToCard':
-            var chatMessage = action.member.username + " was added to the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
-            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            chatMessage = action.member.username + " was added to the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+              "\nhttps://trello.com/c/" + action.data.card.shortLink;
             break;
           case 'removeMemberFromCard':
-            var chatMessage = action.member.username + " was removed from the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
-            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            chatMessage = action.member.username + " was removed from the card '" + action.data.card.name + "' on the Trello board '" + action.data.board.name + "':" +
+              "\nhttps://trello.com/c/" + action.data.card.shortLink;
             break;
           case 'moveCardToBoard':
-            var chatMessage = action.memberCreator.username + " moved the card '" + action.data.card.name + "' from the board '" + action.data.boardSource.name + "' to '" + action.data.list.name + "' on the Trello board '" + action.data.board.name + "':" +
-            "\nhttps://trello.com/c/" + action.data.card.shortLink;
+            chatMessage = action.memberCreator.username + " moved the card '" + action.data.card.name + "' from the board '" + action.data.boardSource.name + "' to '" + action.data.list.name + "' on the Trello board '" + action.data.board.name + "':" +
+              "\nhttps://trello.com/c/" + action.data.card.shortLink;
             break;
         }
         server.rooms.forEach(function(room) {
-          if (room.announce && trelloData.lastAction !== '2011-09-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+          if (room.announce && trelloData.lastAction !== '2011-09-01T00:00:00.000Z' && chatMessage) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
         });
       }
     }
@@ -1731,7 +1732,7 @@ function startClient(server) {
           util.log("[ERROR] " + stanza);
           return;
         }
-       
+
         if (stanza.is('presence')) {
 /*****************************************************************************/
 // Handle channel joins/parts
@@ -1892,7 +1893,7 @@ var github = new githubAPI({
   version: "3.0.0",
   debug: false,
   protocol: "https",
-  host: "api.github.com", 
+  host: "api.github.com",
   timeout: 5000,
   headers: {
     "user-agent": "CU-SquadBot"
