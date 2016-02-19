@@ -555,6 +555,7 @@ var chatCommands = [
     var cName = aNames[0];
     var gName = aNames[1];
     var tName = aNames[2];
+    if (tName.substring(0,1) === '@') tName = tName.substring(1);
     var existingMember = false;
     memberData.forEach(function(user) {
       if (user.cuUser.toLowerCase() === cName.toLowerCase()) existingMember = true;
@@ -1672,10 +1673,6 @@ function startClient(server) {
           util.log("[ERROR] Connection timed out (" + server.name + ").")
         } else {
           util.log("[ERROR] Unknown " + err);
-          // util.log("[ERROR] Restarting client (" + server.name + ").");
-          // var epochTime = Math.floor((new Date).getTime() / 1000);
-          // server.lastStanza = epochTime;
-          // restartClient(server);
         }
       });
 
