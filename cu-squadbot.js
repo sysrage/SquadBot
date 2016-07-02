@@ -1455,7 +1455,7 @@ function checkGitHub(server) {
               server.rooms.forEach(function(room) {
                 if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
               });
-              discordBot.sendMessage('mod-squad', chatMessage);
+              discordBot.sendMessage(discordChannels['mod-squad'], chatMessage);
             }
           }
         }
@@ -1484,7 +1484,7 @@ function checkGitHub(server) {
               server.rooms.forEach(function(room) {
                 if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
               });
-              discordBot.sendMessage('mod-squad', chatMessage);
+              discordBot.sendMessage(discordChannels['mod-squad'], chatMessage);
             }
           }
         }
@@ -1510,7 +1510,7 @@ function checkGitHub(server) {
                 server.rooms.forEach(function(room) {
                   if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
                 });
-                discordBot.sendMessage('mod-squad', chatMessage);
+                discordBot.sendMessage(discordChannels['mod-squad'], chatMessage);
               }
             }
           } else {
@@ -1533,7 +1533,7 @@ function checkGitHub(server) {
                 server.rooms.forEach(function(room) {
                   if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
                 });
-                discordBot.sendMessage('mod-squad', chatMessage);
+                discordBot.sendMessage(discordChannels['mod-squad'], chatMessage);
               }
             }
           }
@@ -1619,7 +1619,7 @@ function checkTrello(server) {
           server.rooms.forEach(function(room) {
             if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
           });
-          discordBot.sendMessage('mod-squad', chatMessage);
+          discordBot.sendMessage(discordChannels['mod-squad'], chatMessage);
         }
       }
     }
@@ -1937,7 +1937,11 @@ config.servers.forEach(function(server) {
 });
 
 var discordBot = new Discord.Client();
+var discordChannels = {};
 discordBot.loginWithToken('MTk4ODY4NjExMjMyODI1MzQ2.ClmaUw.Ye_RieHufr_CFLmnS_aX-Cy1zL8');
+discordBot.channels.forEach(function(channel) {
+  discordChannels[channel.name] = channel;
+});
 
 // discordBot.on('ready', function(message) {
 //   console.log('[NOTICE] Discord bot is online.');
