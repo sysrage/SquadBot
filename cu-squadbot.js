@@ -1938,14 +1938,14 @@ config.servers.forEach(function(server) {
 
 var discordBot = new Discord.Client();
 var discordChannels = {};
-discordBot.loginWithToken('MTk4ODY4NjExMjMyODI1MzQ2.ClmaUw.Ye_RieHufr_CFLmnS_aX-Cy1zL8');
-discordBot.channels.forEach(function(channel) {
-  discordChannels[channel.name] = channel;
+discordBot.on('ready', function() {
+  util.log("[STATUS] Discord bot connected.");
+  discordBot.channels.forEach(function(channel) {
+    discordChannels[channel.name] = channel;
+  });
+  console.dir(discordChannels);
 });
-
-// discordBot.on('ready', function(message) {
-//   console.log('[NOTICE] Discord bot is online.');
-// });
+discordBot.loginWithToken('MTk4ODY4NjExMjMyODI1MzQ2.ClmaUw.Ye_RieHufr_CFLmnS_aX-Cy1zL8');
 
 // discordBot.on('message', function(message) {
 //   const messageAuthorName = message.author.username;
