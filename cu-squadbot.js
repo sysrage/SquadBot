@@ -31,6 +31,7 @@ var moment = require('moment');
 var trelloAPI = require('node-trello');
 var xmpp = require('node-xmpp');
 var request = require('request');
+var Discord = require('discord.js');
 
 var cuRestAPI = require('./cu-rest.js');
 var config = require('./cu-squadbot.cfg');
@@ -1450,9 +1451,12 @@ function checkGitHub(server) {
               var chatMessage = "A new issue for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
               "\n" + event.payload.issue.html_url;
             }
-            server.rooms.forEach(function(room) {
-              if (room.announce && githubData.lastIssue !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
-            });
+            if (githubData.lastIssue !== '2007-10-01T00:00:00.000Z') {
+              server.rooms.forEach(function(room) {
+                if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+              });
+              discordBot.sendMessage('mod-squad', chatMessage);
+            }
           }
         }
 
@@ -1476,9 +1480,12 @@ function checkGitHub(server) {
               var chatMessage = "A new pull request for '" + event.repo.name + "' has been opened by " + event.actor.login + ":" +
               "\n" + event.payload.pull_request.html_url;
             }
-            server.rooms.forEach(function(room) {
-              if (room.announce && githubData.lastPR !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
-            });
+            if (githubData.lastPR !== '2007-10-01T00:00:00.000Z') {
+              server.rooms.forEach(function(room) {
+                if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+              });
+              discordBot.sendMessage('mod-squad', chatMessage);
+            }
           }
         }
 
@@ -1499,9 +1506,12 @@ function checkGitHub(server) {
                 var chatMessage = "A new pull request for '" + event.repo.name + "' has been commented on by " + event.actor.login + ":" +
                 "\n" + event.payload.issue.html_url;
               }
-              server.rooms.forEach(function(room) {
-                if (room.announce && githubData.lastPR !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
-              });
+              if (githubData.lastPR !== '2007-10-01T00:00:00.000Z') {
+                server.rooms.forEach(function(room) {
+                  if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                });
+                discordBot.sendMessage('mod-squad', chatMessage);
+              }
             }
           } else {
             // Comment is for an issue
@@ -1519,9 +1529,12 @@ function checkGitHub(server) {
                 var chatMessage = "A new issue for '" + event.repo.name + "' has been commented on by " + event.actor.login + ":" +
                 "\n" + event.payload.issue.html_url;
               }
-              server.rooms.forEach(function(room) {
-                if (room.announce && githubData.lastIssue !== '2007-10-01T00:00:00.000Z') sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
-              });
+              if (githubData.lastIssue !== '2007-10-01T00:00:00.000Z') {
+                server.rooms.forEach(function(room) {
+                  if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+                });
+                discordBot.sendMessage('mod-squad', chatMessage);
+              }
             }
           }
         }
@@ -1602,9 +1615,12 @@ function checkTrello(server) {
               "\nhttps://trello.com/c/" + action.data.card.shortLink;
             break;
         }
-        server.rooms.forEach(function(room) {
-          if (room.announce && trelloData.lastAction !== '2011-09-01T00:00:00.000Z' && chatMessage) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
-        });
+        if (trelloData.lastAction !== '2011-09-01T00:00:00.000Z' && chatMessage) {
+          server.rooms.forEach(function(room) {
+            if (room.announce) sendChat(server, chatMessage, room.name + "@" + server.service + "." + server.address);
+          });
+          discordBot.sendMessage('mod-squad', chatMessage);
+        }
       }
     }
 
@@ -1712,7 +1728,7 @@ function startClient(server) {
         client[server.name].githubTimer = timerGitHub(server);
 
         // Start monitoring Trello activity
-        client[server.name].githubTimer = timerTrello(server);
+        client[server.name].trelloTimer = timerTrello(server);
 
         // Start verifying client is still receiving stanzas
         server.lastStanza = Math.floor((new Date).getTime() / 1000);
@@ -1919,3 +1935,22 @@ config.servers.forEach(function(server) {
   // Start XMPP client
   startClient(server);
 });
+
+var discordBot = new Discord.Client();
+discordBot.loginWithToken('MTk4ODY4NjExMjMyODI1MzQ2.ClmaUw.Ye_RieHufr_CFLmnS_aX-Cy1zL8');
+
+// discordBot.on('ready', function(message) {
+//   console.log('[NOTICE] Discord bot is online.');
+// });
+
+// discordBot.on('message', function(message) {
+//   const messageAuthorName = message.author.username;
+//   const messageChannelName = message.channel.name;
+//   const messageContent = message.content;
+//   if (messageChannelName === 'mod-squad') {
+//     if (messageContent === 'ping') {
+//       discordBot.reply(message, 'pong');
+//     }
+//   }
+// });
+
